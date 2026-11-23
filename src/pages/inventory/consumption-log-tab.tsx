@@ -19,8 +19,10 @@ import { ConsumptionFormDialog } from "@/pages/inventory/consumption-form-dialog
 import { CodedConsumptionDialog } from "@/pages/inventory/coded-consumption-dialog";
 import { formatEntered } from "@/pages/inventory/stock-qty";
 import { FixUsageDialog } from "@/pages/inventory/fix-usage-dialog";
+import { useUnitLabel } from "@/pages/inventory/use-unit-label";
 
 export function ConsumptionLogTab() {
+  const unitLabel = useUnitLabel();
   const [batchFilter, setBatchFilter] = useState<string>("ALL");
   const [houseFilter, setHouseFilter] = useState<string>("ALL");
   const [itemFilter, setItemFilter] = useState<string>("ALL");
@@ -93,7 +95,7 @@ export function ConsumptionLogTab() {
       sortValue: (c) => c.item.name,
       exportValue: (c) => c.item.name,
     },
-    { key: "quantity", header: "Quantity", render: (c) => formatEntered(c.quantity, c.unit, c.item), numeric: true, sortValue: (c) => Number(c.base_quantity) },
+    { key: "quantity", header: "Quantity", render: (c) => formatEntered(c.quantity, c.unit, c.item, unitLabel), numeric: true, sortValue: (c) => Number(c.base_quantity) },
     { key: "house", header: "House", render: (c) => c.house.name },
     { key: "batch", header: "Batch", render: (c) => c.batch?.batch_code ?? "—" },
     {

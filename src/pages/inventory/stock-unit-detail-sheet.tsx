@@ -21,7 +21,7 @@ import { apiFetch, ApiError, usePostData, useGetData, type Paginated } from "@/l
 import { humanizeEnum } from "@/lib/utils";
 import type { Consumption, Item, StockUnit, Warehouse } from "@/pages/inventory/types";
 import type { House } from "@/pages/houses/types";
-import type { LookupRow } from "@/pages/settings/lookup-types";
+import { useUnitLabel } from "@/pages/inventory/use-unit-label";
 // Reuse the one STOCK_UNIT_STATUS_TONE mapping rather than keeping a second copy in sync (see status-tone.ts).
 import { STOCK_UNIT_STATUS_TONE } from "@/components/shared/status-tone";
 
@@ -44,8 +44,7 @@ export function StockUnitDetailSheet({ unit, onOpenChange }: StockUnitDetailShee
   const { data: houses } = useGetData<Paginated<House>>("/houses?limit=100", ["houses"]);
   const { data: warehouses } = useGetData<Paginated<Warehouse>>("/warehouses?limit=100", ["warehouses"]);
   const { data: items } = useGetData<Paginated<Item>>("/items?limit=100", ["items"]);
-  const { data: unitLookup } = useGetData<Paginated<LookupRow>>("/units?active=true&limit=100", ["units", "active"]);
-  const unitLabel = (code: string) => unitLookup?.results.find((u) => u.code === code)?.label ?? humanizeEnum(code);
+  const unitLabel = useUnitLabel();
   // No stock_unit_id filter on GET /consumptions (out of scope for this redesign, see spec) --
   // fetch by item_id (bounded, same limit=100 convention as everywhere else) and narrow client-side.
   const itemId = unit?.purchase_item?.item.id;

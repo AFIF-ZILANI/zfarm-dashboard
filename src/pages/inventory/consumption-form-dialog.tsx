@@ -18,11 +18,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { NumericInput } from "@/components/utils/NumaricInput";
 import { useGetData, usePostData, type Paginated } from "@/lib/api";
-import { humanizeEnum } from "@/lib/utils";
 import type { Item, LocationStockRow } from "@/pages/inventory/types";
 import { useFormatStock } from "@/pages/inventory/use-format-stock";
 import type { House } from "@/pages/houses/types";
-import type { LookupRow } from "@/pages/settings/lookup-types";
+import { useUnitLabel } from "@/pages/inventory/use-unit-label";
 
 // Local calendar day: toISOString() is UTC, which is still "yesterday" until 06:00 in Bangladesh.
 const today = () => new Date().toLocaleDateString("en-CA");
@@ -72,8 +71,7 @@ export function ConsumptionFormDialog({ open, onOpenChange }: ConsumptionFormDia
     "items",
     "unit-tracked",
   ]);
-  const { data: units } = useGetData<Paginated<LookupRow>>("/units?active=true&limit=100", ["units", "active"]);
-  const unitLabel = (code: string) => units?.results.find((u) => u.code === code)?.label ?? humanizeEnum(code);
+  const unitLabel = useUnitLabel();
 
   // Only what is actually in the house: the server refuses a draw bigger than the house's stock.
   const { data: houseStock } = useGetData<LocationStockRow[]>(

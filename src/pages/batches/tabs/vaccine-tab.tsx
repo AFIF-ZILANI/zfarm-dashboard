@@ -25,6 +25,7 @@ import { formatDate, humanizeEnum } from "@/lib/utils";
 import { cycleDay, dayStart } from "@/pages/batches/cycle-day";
 import type { Batch, BatchVaccineSchedule, VaccineMethod, VaccineTemplate } from "@/pages/batches/types";
 import { MethodSelect, PurposeSelect } from "@/pages/batches/vaccine-fields";
+import { useUnitLabel } from "@/pages/inventory/use-unit-label";
 
 /** Due/overdue are derived, never stored: only PENDING moves with the calendar. */
 function rowState(row: BatchVaccineSchedule, today: number): { tone: Tone; label: string } {
@@ -348,13 +349,14 @@ export function VaccineTab({ batch }: { batch: Batch }) {
 
 /** One line per house: who confirmed it and with which bottles, or still waiting. */
 function HouseLines({ row }: { row: BatchVaccineSchedule }) {
+  const unitLabel = useUnitLabel();
   if (row.houses.length === 0) return null;
   return (
     <ul className="flex flex-col gap-0.5 text-xs text-muted-foreground">
       {row.houses.map((h) => {
         const bottles = row.vaccinations
           .filter((v) => v.consumption?.house.id === h.id)
-          .map((v) => `${v.vaccine_name} ${Number(v.consumption!.quantity)} ${humanizeEnum(v.consumption!.unit)} (…${v.consumption!.stock_unit_id?.slice(-7)})`);
+          .map((v) => `${v.vaccine_name} ${Number(v.consumption!.quantity)} ${unitLabel(v.consumption!.unit)} (…${v.consumption!.stock_unit_id?.slice(-7)})`);
         return (
           <li key={h.id}>
             <span className="font-medium text-foreground">{h.name}</span>
