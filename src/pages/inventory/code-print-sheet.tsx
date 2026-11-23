@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { usePostData } from "@/lib/api";
+import { printSheet } from "@/lib/print";
 import { CODES_PER_PAGE, PRINT_LAYOUT } from "@/pages/inventory/types";
 
 type CodePrintSheetProps = {
@@ -46,23 +47,9 @@ export function CodePrintSheet({ ids, open, onOpenChange }: CodePrintSheetProps)
       }
     );
 
-  // The sheet sits inside base-ui's fixed, screen-centered dialog, which becomes the containing
-  // block for #printable-codes' `position:absolute` -- so it printed from the middle of the page.
-  // Hoist the node to <body> for the duration of printing so it resolves against the page top-left,
-  // then put it back where it was.
   const handlePrint = () => {
     const node = document.getElementById("printable-codes");
-    if (!node) return;
-    const parent = node.parentElement!;
-    const anchor = node.nextSibling;
-    document.body.appendChild(node);
-    const restore = () => {
-      parent.insertBefore(node, anchor);
-      window.removeEventListener("afterprint", restore);
-      setConfirming(true);
-    };
-    window.addEventListener("afterprint", restore);
-    window.print();
+    if (node) printSheet(node, () => setConfirming(true));
   };
 
   return (

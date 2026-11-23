@@ -1,9 +1,11 @@
+import { useRef } from "react";
 import { useNavigate, useParams } from "react-router";
 import { ArrowLeft, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePageTitle } from "@/components/layout/use-page-title";
 import { useGetData, type Paginated } from "@/lib/api";
+import { printSheet } from "@/lib/print";
 import { formatTk, humanizeEnum } from "@/lib/utils";
 import {
   EMPLOYEE_ROLE_LABELS,
@@ -38,6 +40,7 @@ export function PayslipPage() {
   const { id, payrollId } = useParams<{ id: string; payrollId: string }>();
   const navigate = useNavigate();
   usePageTitle("Payslip");
+  const sheet = useRef<HTMLElement>(null);
 
   const { data: slip, isLoading } = useGetData<Payslip>(
     `/payroll-records/${payrollId}/payslip`,
@@ -77,13 +80,16 @@ export function PayslipPage() {
           <ArrowLeft />
           Back to employee
         </Button>
-        <Button size="sm" variant="outline" onClick={() => window.print()}>
+        <Button size="sm" variant="outline" onClick={() => sheet.current && printSheet(sheet.current)}>
           <Printer />
           Print
         </Button>
       </div>
 
-      <article className="max-w-2xl rounded-lg border border-border bg-card p-8 print:border-0 print:p-0">
+      <article
+        ref={sheet}
+        className="max-w-2xl rounded-lg border border-border bg-card p-8 print:max-w-none print:border-0 print:p-0"
+      >
         <header className="flex items-start justify-between gap-6 border-b border-border pb-4">
           <div>
             <h1 className="text-lg font-semibold">{FARM.name}</h1>
@@ -135,7 +141,7 @@ export function PayslipPage() {
           ) : (
             <ul className="flex flex-col gap-1.5 text-sm">
               {slip.entries.map((e) => (
-                <li key={e.id} className="flex justify-between gap-4">
+                <li key={e.id} className="flex break-inside-avoid justify-between gap-4">
                   <span className="min-w-0">
                     <span className="text-muted-foreground">
                       {new Date(e.incident_date).toLocaleDateString()}
@@ -179,7 +185,7 @@ export function PayslipPage() {
           )}
         </section>
 
-        <footer className="mt-4 grid grid-cols-2 gap-8 pt-8 text-xs text-muted-foreground">
+        <footer className="mt-4 grid break-inside-avoid grid-cols-2 gap-8 pt-8 text-xs text-muted-foreground">
           <div className="border-t border-border pt-1">Employee signature</div>
           <div className="border-t border-border pt-1">For {FARM.name}</div>
         </footer>
