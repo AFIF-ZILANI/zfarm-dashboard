@@ -22,6 +22,9 @@ import type { LookupRow } from "@/pages/settings/lookup-types";
 type PendingUnit = { unit: string; factor_to_base: string; is_purchasable: boolean; is_usable: boolean };
 type MetaRow = { key: string; value: string };
 
+/** Value of the "Custom unit…" choice in the unit picker. Lower case, so it can't match a real unit code. */
+const CUSTOM_UNIT = "__custom__";
+
 const itemSchema = z.object({
   name: z.string().trim().min(1, "Name is required"),
   category: z.string().min(1, "Select a category"),
@@ -75,6 +78,7 @@ export function ItemFormPage() {
 
   const [pendingUnits, setPendingUnits] = useState<PendingUnit[]>([]);
   const [newUnitCode, setNewUnitCode] = useState("");
+  const [newUnitName, setNewUnitName] = useState("");
   const [newUnitFactor, setNewUnitFactor] = useState("");
   const [newUnitPurchasable, setNewUnitPurchasable] = useState(true);
   const [newUnitUsable, setNewUnitUsable] = useState(false);
@@ -148,6 +152,7 @@ export function ItemFormPage() {
     ItemUnit,
     { item_id: string; unit: string; factor_to_base: number; is_purchasable: boolean; is_usable: boolean }
   >("/item-units", ["items"]);
+  const createUnit = usePostData<UnitRow, { label: string; base_unit: string }>("/units", ["units"]);
   const deleteItemUnit = useDelete<null, string>((unitId) => `/item-units/${unitId}`, ["items"]);
   const unlinkOrganization = useDelete<null, string>((linkId) => `/item-organizations/${linkId}`, ["organizations"]);
 
@@ -165,18 +170,45 @@ export function ItemFormPage() {
   const unitLabel = (code: string) => units?.results.find((u) => u.code === code)?.label ?? humanizeEnum(code);
   const unitFixedFactor = (code: string) => units?.results.find((u) => u.code === code)?.fixed_factor ?? null;
 
-  const addPendingUnit = () => {
-    const factor = Number(newUnitFactor);
-    if (!newUnitCode || !Number.isFinite(factor) || factor <= 0) return;
-    if (!newUnitPurchasable && !newUnitUsable) return;
-    setPendingUnits((prev) => [
-      ...prev,
-      { unit: newUnitCode, factor_to_base: newUnitFactor, is_purchasable: newUnitPurchasable, is_usable: newUnitUsable },
-    ]);
+  const customUnit = newUnitCode === CUSTOM_UNIT;
+  const stagedFactor = Number(newUnitFactor);
+  const unitStaged =
+    (customUnit ? newUnitName.trim() !== "" : newUnitCode !== "") &&
+    Number.isFinite(stagedFactor) &&
+    stagedFactor > 0 &&
+    (newUnitPurchasable || newUnitUsable);
+
+  /** The unit list including whatever is filled in on the add row. A custom name becomes a real unit first
+   * (shared by every item of this base unit; the size stays per item). Null when that was refused. */
+  const withStagedUnit = async (): Promise<PendingUnit[] | null> => {
+    if (!unitStaged) return pendingUnits;
+    let code = newUnitCode;
+    if (customUnit) {
+      const label = newUnitName.trim();
+      // Typing the name of a unit that's already offered just picks that one.
+      const existing = addableUnits.find((u) => u.label.toLowerCase() === label.toLowerCase());
+      if (existing && existing.fixed_factor !== null) {
+        toast.error(`"${existing.label}" has a fixed size. Pick it from the list.`);
+        return null;
+      }
+      try {
+        code = existing?.code ?? (await createUnit.mutateAsync({ label, base_unit: baseUnit })).code;
+      } catch (e) {
+        toast.error((e as ApiError).message);
+        return null;
+      }
+    }
+    const next = [
+      ...pendingUnits,
+      { unit: code, factor_to_base: newUnitFactor, is_purchasable: newUnitPurchasable, is_usable: newUnitUsable },
+    ];
+    setPendingUnits(next);
     setNewUnitCode("");
+    setNewUnitName("");
     setNewUnitFactor("");
     setNewUnitPurchasable(true);
     setNewUnitUsable(false);
+    return next;
   };
 
   /** No PATCH on ItemUnit -- a changed factor or purpose flag is a delete-then-recreate of that
@@ -250,14 +282,12 @@ export function ItemFormPage() {
 
     // A unit picked in the "Add a unit" row but never clicked Add still counts -- otherwise it's
     // silently dropped on save.
-    const stagedFactor = Number(newUnitFactor);
-    const units =
-      newUnitCode && Number.isFinite(stagedFactor) && stagedFactor > 0 && (newUnitPurchasable || newUnitUsable)
-        ? [
-            ...pendingUnits,
-            { unit: newUnitCode, factor_to_base: newUnitFactor, is_purchasable: newUnitPurchasable, is_usable: newUnitUsable },
-          ]
-        : pendingUnits;
+    if (customUnit && newUnitName.trim() !== "" && !unitStaged) {
+      toast.error(`Finish adding "${newUnitName.trim()}": enter its factor and tick Purchasable or Usable.`);
+      return;
+    }
+    const units = await withStagedUnit();
+    if (!units) return;
 
     let savedItem: Item;
     try {
@@ -448,7 +478,8 @@ export function ItemFormPage() {
             <p className="text-xs text-muted-foreground">
               Only units belonging to this item's base-unit family are offered — e.g. a Gram-based item can add
               Bag or Metric Ton, but not Liter. A unit with a fixed conversion (like Liter or Metric Ton) has its
-              factor locked in automatically; package-size units (Bag, Bottle, Container) stay editable.
+              factor locked in automatically; package-size units (Bag, Bottle, Container) stay editable. Pick
+              "Custom unit…" to name your own, e.g. Small Bag and Big Bag.
             </p>
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
@@ -519,12 +550,14 @@ export function ItemFormPage() {
                 onValueChange={(v) => {
                   const code = v ?? "";
                   setNewUnitCode(code);
-                  const fixed = unitFixedFactor(code);
-                  if (fixed !== null) setNewUnitFactor(fixed);
+                  setNewUnitName("");
+                  setNewUnitFactor(unitFixedFactor(code) ?? "");
                 }}
               >
                 <SelectTrigger className="w-40">
-                  <SelectValue>{(v: string) => (v ? unitLabel(v) : "Add a unit")}</SelectValue>
+                  <SelectValue>
+                    {(v: string) => (v === CUSTOM_UNIT ? "Custom unit…" : v ? unitLabel(v) : "Add a unit")}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {addableUnits.map((u) => (
@@ -532,8 +565,20 @@ export function ItemFormPage() {
                       {u.label}
                     </SelectItem>
                   ))}
+                  {baseUnit && <SelectItem value={CUSTOM_UNIT}>Custom unit…</SelectItem>}
                 </SelectContent>
               </Select>
+              {customUnit && (
+                <Input
+                  className="w-40"
+                  placeholder="e.g. Small Bag"
+                  aria-label="Custom unit name"
+                  maxLength={40}
+                  autoFocus
+                  value={newUnitName}
+                  onChange={(e) => setNewUnitName(e.target.value)}
+                />
+              )}
               <span className="text-xs text-muted-foreground">factor =</span>
               <NumericInput
                 allowDecimal
@@ -556,8 +601,8 @@ export function ItemFormPage() {
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={addPendingUnit}
-                disabled={!newUnitCode || (!newUnitPurchasable && !newUnitUsable)}
+                onClick={() => void withStagedUnit()}
+                disabled={!unitStaged || createUnit.isPending}
               >
                 <Plus />
                 Add
