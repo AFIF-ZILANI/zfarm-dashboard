@@ -21,7 +21,7 @@ import { apiFetch, ApiError, useGetData, type Paginated } from "@/lib/api";
 import { humanizeEnum } from "@/lib/utils";
 import type { Item, StockUnit, Warehouse } from "@/pages/inventory/types";
 import type { House } from "@/pages/houses/types";
-import type { LookupRow } from "@/pages/settings/lookup-types";
+import { useUnitLabel } from "@/pages/inventory/use-unit-label";
 
 type StockAllocationFormDialogProps = {
   open: boolean;
@@ -52,8 +52,7 @@ export function StockAllocationFormDialog({ open, onOpenChange }: StockAllocatio
   const { data: houses } = useGetData<Paginated<House>>("/houses?limit=100", ["houses"]);
   const { data: warehouses } = useGetData<Paginated<Warehouse>>("/warehouses?limit=100", ["warehouses"]);
   const { data: items } = useGetData<Paginated<Item>>("/items?limit=100", ["items"]);
-  const { data: unitLookup } = useGetData<Paginated<LookupRow>>("/units?active=true&limit=100", ["units", "active"]);
-  const unitLabel = (code: string) => unitLookup?.results.find((u) => u.code === code)?.label ?? humanizeEnum(code);
+  const unitLabel = useUnitLabel();
   const queryClient = useQueryClient();
 
   const firstItemId = units[0]?.purchase_item?.item.id;

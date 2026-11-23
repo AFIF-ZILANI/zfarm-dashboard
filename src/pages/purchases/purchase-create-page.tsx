@@ -27,6 +27,7 @@ import { ItemCombobox } from "@/pages/purchases/item-combobox";
 import type { Item, Warehouse } from "@/pages/inventory/types";
 import { LOAN_INTEREST } from "@/pages/finance/types";
 import type { LookupRow } from "@/pages/settings/lookup-types";
+import { useUnitLabel } from "@/pages/inventory/use-unit-label";
 import type { Supplier } from "@/pages/suppliers/types";
 import type { PaymentInstrument } from "@/pages/payments/types";
 import { DISCOUNT_TYPES, type DiscountType, type Purchase } from "@/pages/purchases/types";
@@ -169,7 +170,6 @@ export function PurchaseCreatePage() {
   const { data: suppliers } = useGetData<Paginated<Supplier>>("/suppliers?limit=100", ["suppliers"]);
   const { data: warehouses } = useGetData<Paginated<Warehouse>>("/warehouses?limit=100", ["warehouses"]);
   const { data: items } = useGetData<Paginated<Item>>("/items?limit=100", ["items"]);
-  const { data: units } = useGetData<Paginated<LookupRow>>("/units?active=true&limit=100", ["units", "active"]);
   const { data: admins } = useGetData<Paginated<Admin>>("/admins?limit=100", ["admins"]);
   const { data: instruments } = useGetData<Paginated<PaymentInstrument>>(
     "/payment-instruments?limit=100&is_active=true",
@@ -185,7 +185,7 @@ export function PurchaseCreatePage() {
   // Chicks are bought from their batch ("Add chick delivery"), so they're not offered here.
   // Farm-made items (litter) are never bought.
   const itemOptions = (items?.results ?? []).filter((i) => i.category !== "CHICKS" && !i.is_farm_made);
-  const unitLabel = (code: string) => units?.results.find((u) => u.code === code)?.label ?? humanizeEnum(code);
+  const unitLabel = useUnitLabel();
 
   /** A line's allowed units are the item's own base unit (always purchasable -- see
    * item-form-page.tsx, it never gets its own ItemUnit row) plus whichever ItemUnit conversions

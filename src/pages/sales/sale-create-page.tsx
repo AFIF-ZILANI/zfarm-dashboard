@@ -24,12 +24,12 @@ import { usePageTitle } from "@/components/layout/use-page-title";
 import { apiFetch, useGetData, usePostData, type Paginated } from "@/lib/api";
 import { fetchAllPages } from "@/lib/all-pages";
 import { DISCOUNT_TYPE_LABELS, discountAmount, lineNet } from "@/lib/discount";
-import { formatTk, humanizeEnum, toCents } from "@/lib/utils";
+import { formatTk, toCents } from "@/lib/utils";
 import { farmToday } from "@/lib/farm-day";
 import { ItemCombobox } from "@/pages/purchases/item-combobox";
 import { useFormatStock } from "@/pages/inventory/use-format-stock";
 import type { Item, Warehouse } from "@/pages/inventory/types";
-import type { LookupRow } from "@/pages/settings/lookup-types";
+import { useUnitLabel } from "@/pages/inventory/use-unit-label";
 import type { Batch } from "@/pages/batches/types";
 import type { Customer } from "@/pages/customers/types";
 import { DISCOUNT_TYPES, type DiscountType } from "@/pages/purchases/types";
@@ -108,8 +108,7 @@ export function SaleCreatePage() {
   const { data: batches } = useGetData<Paginated<Batch>>("/batches?limit=100", ["batches", "sale-picker"]);
   const openBatches = (batches?.results ?? []).filter((b) => b.status !== "CLOSED");
   const { data: warehouses } = useGetData<Paginated<Warehouse>>("/warehouses?limit=100", ["warehouses"]);
-  const { data: units } = useGetData<Paginated<LookupRow>>("/units?active=true&limit=100", ["units", "active"]);
-  const unitLabel = (code: string) => units?.results.find((u) => u.code === code)?.label ?? humanizeEnum(code);
+  const unitLabel = useUnitLabel();
 
   // Only the chosen kind's items, every page of them: the picker searches in the browser.
   const kindQuery =

@@ -11,13 +11,14 @@ import { KPICard } from "@/components/shared/kpi-card";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { usePageTitle } from "@/components/layout/use-page-title";
 import { useGetData, type Paginated } from "@/lib/api";
-import { formatDate, formatTk, humanizeEnum } from "@/lib/utils";
+import { formatDate, formatTk } from "@/lib/utils";
 import { paymentStatus, type SaleDetail, type SoldBottle } from "@/pages/sales/types";
 import { SALE_KIND_LABEL } from "@/pages/sales/sale-kinds";
 import type { Customer } from "@/pages/customers/types";
 import { PaymentCreateDialog } from "@/pages/payments/payment-create-dialog";
 import { useOutstanding } from "@/pages/sales/use-outstanding";
 import { useFormatStock } from "@/pages/inventory/use-format-stock";
+import { useUnitLabel } from "@/pages/inventory/use-unit-label";
 
 export function SaleDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -33,6 +34,7 @@ export function SaleDetailPage() {
   const { trueAmounts } = useOutstanding("SALE");
 
   const fmt = useFormatStock();
+  const unitLabel = useUnitLabel();
   const coded = sale?.kind === "CODED";
   const columns: Column<SaleDetail["items"][number]>[] = [
     { key: "item", header: "Item", render: (l) => <TruncatedText text={l.item.name} className="max-w-48" /> },
@@ -42,7 +44,7 @@ export function SaleDetailPage() {
       // QR lines count packs; the unit only names the pack (Bottle, Pouch), so no conversion applies.
       render: (l) =>
         coded
-          ? `${Number(l.quantity)} ${l.unit ? humanizeEnum(l.unit).toLowerCase() : "packs"}`
+          ? `${Number(l.quantity)} ${l.unit ? unitLabel(l.unit).toLowerCase() : "packs"}`
           : fmt.entered(l.quantity, l.unit ?? l.item.unit, l.item.id),
       numeric: true,
     },
@@ -66,7 +68,7 @@ export function SaleDetailPage() {
       header: "Item",
       render: (b) => sale?.items.find((l) => l.id === b.line_id)?.item.name ?? "",
     },
-    { key: "size", header: "Size", render: (b) => `${Number(b.size)} ${b.unit.toLowerCase()}`, numeric: true },
+    { key: "size", header: "Size", render: (b) => `${Number(b.size)} ${unitLabel(b.unit).toLowerCase()}`, numeric: true },
     { key: "lot", header: "Bought", render: (b) => formatDate(b.lot_date) },
     { key: "by", header: "Scanned by", render: (b) => b.sold_by ?? "" },
     { key: "when", header: "When", render: (b) => formatDate(b.sold_at), sortValue: (b) => b.sold_at },

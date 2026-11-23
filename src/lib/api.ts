@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   useMutation,
   useQuery,
@@ -5,6 +6,7 @@ import {
   type UseMutationOptions,
   type UseQueryOptions,
 } from "@tanstack/react-query";
+import { createSendOnce } from "@/lib/send-once";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5085/api";
 
@@ -132,13 +134,16 @@ function useApiMutation<TData, TVars>(
 ) {
   const queryClient = useQueryClient();
   const { onSuccess, ...rest } = options ?? {};
+  const [sendOnce] = useState(() => createSendOnce());
 
   const mutation = useMutation<TData, ApiError, TVars>({
-    mutationFn: (vars) =>
-      apiFetch<TData>(typeof endpoint === "function" ? endpoint(vars) : endpoint, {
-        method,
-        body: method === "DELETE" ? undefined : JSON.stringify(vars),
-      }),
+    mutationFn: (vars) => {
+      const url = typeof endpoint === "function" ? endpoint(vars) : endpoint;
+      const body = method === "DELETE" ? undefined : JSON.stringify(vars);
+      const send = () => apiFetch<TData>(url, { method, body });
+      // Only a POST creates something new each time it is sent.
+      return method === "POST" ? sendOnce(`${url} ${body ?? ""}`, send) : send();
+    },
     onSuccess: (...args) => {
       void queryClient.invalidateQueries({ queryKey: key });
       onSuccess?.(...args);
