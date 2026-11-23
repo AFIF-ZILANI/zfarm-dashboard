@@ -163,7 +163,8 @@ export function ExpenseCreateDialog({ open, onOpenChange }: ExpenseCreateDialogP
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      {(categories?.results ?? []).map((c) => (
+                      {/* Loan interest is booked by the Loans tab, never entered by hand. */}
+                      {(categories?.results ?? []).filter((c) => c.code !== "LOAN_INTEREST").map((c) => (
                         <SelectItem key={c.code} value={c.code}>
                           {c.label}
                         </SelectItem>

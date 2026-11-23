@@ -78,6 +78,8 @@ export type FinancePeriod = {
   cash: number;
   receivables: number;
   payables: number;
+  /** what is still owed on loans: their totals (principal + interest) less installments paid */
+  loans_owed: number;
   cost_breakdown: CostLine[];
 };
 export type FinanceSummary = { current: FinancePeriod; previous: FinancePeriod };
@@ -157,4 +159,49 @@ export type ExpenseSummary = {
   paid: number;
   unpaid: number;
   by_category: { code: string; label: string; amount: number }[];
+};
+
+// ── loans ──────────────────────────────────────────────────────────────────────
+export const LOAN_PURPOSES = ["BATCH", "FARM", "LOSS", "OLD_DEBT"] as const;
+export type LoanPurpose = (typeof LOAN_PURPOSES)[number];
+export const LOAN_TERMS = ["EMI", "FLAT", "NONE"] as const;
+export type LoanTerms = (typeof LOAN_TERMS)[number];
+export const LOAN_FREQUENCIES = ["MONTHLY", "WEEKLY", "ONE_OFF"] as const;
+export type LoanFrequency = (typeof LOAN_FREQUENCIES)[number];
+
+export const LOAN_PURPOSE_LABEL: Record<LoanPurpose, string> = {
+  BATCH: "Run a batch",
+  FARM: "Farm build-out",
+  LOSS: "Cover a loss",
+  OLD_DEBT: "Old debt",
+};
+export const LOAN_TERMS_LABEL: Record<LoanTerms, string> = {
+  EMI: "Bank EMI",
+  FLAT: "Flat total",
+  NONE: "No interest",
+};
+
+/** GET /loans row: the loan plus where it stands. Money fields are decimal strings. */
+export type Loan = {
+  id: string;
+  lender: string;
+  purpose: LoanPurpose;
+  batch_id: string | null;
+  batch: { batch_code: string } | null;
+  principal: string;
+  terms: LoanTerms;
+  annual_rate: string | null;
+  total_payable: string;
+  installment_amount: string;
+  installment_count: number;
+  frequency: LoanFrequency;
+  first_due_on: string;
+  received_on: string;
+  note: string | null;
+  created_at: string;
+  paid: string;
+  left: string;
+  interest_total: string;
+  interest_booked: string;
+  next_due_on: string | null;
 };

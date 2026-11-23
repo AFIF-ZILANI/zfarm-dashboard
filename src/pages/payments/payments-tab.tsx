@@ -11,7 +11,7 @@ import type { Purchase } from "@/pages/purchases/types";
 import type { Sale, BirdSale } from "@/pages/sales/types";
 import type { PaymentInstrument } from "@/pages/payments/types";
 import { PaymentCreateDialog } from "@/pages/payments/payment-create-dialog";
-import type { Payment } from "@/pages/payments/types";
+import { KIND_LABEL, type Payment } from "@/pages/payments/types";
 
 export function PaymentsTab() {
   const [createOpen, setCreateOpen] = useState(false);
@@ -43,12 +43,15 @@ export function PaymentsTab() {
       const batch = birdSale ? batches?.results.find((b) => b.id === birdSale.batch_id) : undefined;
       return batch?.batch_code ?? "Bird sale";
     }
-    return humanizeEnum(p.ref_type);
+    // Owner money, other, transfers: no bill to name, so the note says what it was.
+    return p.note ?? KIND_LABEL[p.ref_type] ?? humanizeEnum(p.ref_type);
   };
 
   const payments = data?.results ?? [];
-  const totalIncoming = payments.filter((p) => p.direction === "INCOMING").reduce((sum, p) => sum + parseFloat(p.amount), 0);
-  const totalOutgoing = payments.filter((p) => p.direction === "OUTGOING").reduce((sum, p) => sum + parseFloat(p.amount), 0);
+  // A transfer only moves money between the farm's own accounts: neither in nor out.
+  const flows = payments.filter((p) => p.ref_type !== "TRANSFER");
+  const totalIncoming = flows.filter((p) => p.direction === "INCOMING").reduce((sum, p) => sum + parseFloat(p.amount), 0);
+  const totalOutgoing = flows.filter((p) => p.direction === "OUTGOING").reduce((sum, p) => sum + parseFloat(p.amount), 0);
 
   const columns: Column<Payment>[] = [
     { key: "date", header: "Date", render: (p) => new Date(p.payment_date).toLocaleDateString() },
@@ -56,13 +59,17 @@ export function PaymentsTab() {
       key: "direction",
       header: "Direction",
       render: (p) => (
-        <StatusBadge
-          tone={p.direction === "INCOMING" ? "success" : "warning"}
-          label={humanizeEnum(p.direction)}
-        />
+        p.ref_type === "TRANSFER" ? (
+          <StatusBadge tone="neutral" label="Transfer" />
+        ) : (
+          <StatusBadge
+            tone={p.direction === "INCOMING" ? "success" : "warning"}
+            label={humanizeEnum(p.direction)}
+          />
+        )
       ),
     },
-    { key: "ref_type", header: "Pays for", render: (p) => humanizeEnum(p.ref_type) },
+    { key: "ref_type", header: "Kind", render: (p) => KIND_LABEL[p.ref_type] ?? humanizeEnum(p.ref_type) },
     { key: "ref", header: "Record", render: (p) => refLabel(p) },
     { key: "amount", header: "Amount", render: (p) => formatTk(p.amount), numeric: true },
     { key: "from", header: "From", render: (p) => instrumentLabel(p.from_instrument_id) },
@@ -93,7 +100,7 @@ export function PaymentsTab() {
         empty={{
           icon: Wallet,
           title: "No payments recorded yet",
-          description: "Record a payment against a purchase, sale, or bird sale.",
+          description: "Record money in or out: a bill, your own capital or draw, or a transfer between accounts.",
           action: { label: "Record payment", onClick: () => setCreateOpen(true) },
         }}
       />

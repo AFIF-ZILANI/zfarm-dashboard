@@ -11,7 +11,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { KPICard } from "@/components/shared/kpi-card";
 import { useGetData, type Paginated } from "@/lib/api";
 import { cn, daysAgoMs, formatDate, formatTk } from "@/lib/utils";
-import type { Payment, PaymentInstrument } from "@/pages/payments/types";
+import { KIND_LABEL, NO_BILL_KINDS, type NoBillKind, type Payment, type PaymentInstrument } from "@/pages/payments/types";
 import type { FinanceMonth, FinanceOwed, FinancePeriod, FinanceSummary, FinancialDashboard, OwedSide } from "@/pages/finance/types";
 import { CashFlowChart, CostBreakdownChart, ProfitTrendChart } from "@/pages/finance/finance-charts";
 
@@ -163,7 +163,7 @@ export function OverviewTab() {
       </div>
 
       {/* Am I making money, do I have cash, who owes whom */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KPICard label="Cash in accounts" money={tile((p) => p.cash)} icon={Wallet} isLoading={loading} isError={summary.isError} hint={hint((p) => p.cash)} tone={cur && cur.cash < 0 ? "critical" : undefined} />
         <KPICard label="Revenue" money={tile((p) => p.revenue)} icon={TrendingUp} isLoading={loading} isError={summary.isError} hint={hint((p) => p.revenue)} />
         <KPICard label="Costs" money={tile((p) => p.costs)} icon={Receipt} isLoading={loading} isError={summary.isError} hint={hint((p) => p.costs)} />
@@ -177,7 +177,8 @@ export function OverviewTab() {
           hint={cur ? `${cur.margin === null ? "No revenue" : `${(cur.margin * 100).toFixed(0)}% margin`}. ${hint((p) => p.net_profit) ?? ""}` : undefined}
         />
         <KPICard label="Customers owe us" money={tile((p) => p.receivables)} icon={HandCoins} isLoading={loading} isError={summary.isError} hint={hint((p) => p.receivables)} />
-        <KPICard label="We owe" money={tile((p) => p.payables)} icon={Banknote} isLoading={loading} isError={summary.isError} hint={hint((p) => p.payables)} />
+        <KPICard label="We owe on bills" money={tile((p) => p.payables)} icon={Banknote} isLoading={loading} isError={summary.isError} hint={hint((p) => p.payables)} />
+        <KPICard label="Loans owed" money={tile((p) => p.loans_owed)} icon={Landmark} isLoading={loading} isError={summary.isError} hint={hint((p) => p.loans_owed)} />
       </div>
 
       {/* Am I making money over time, and where does it go */}
@@ -232,7 +233,7 @@ function AccountsCard() {
         {isLoading ? (
           <Skeleton className="h-28 w-full" />
         ) : accounts.length === 0 ? (
-          <EmptyState icon={Landmark} title="No farm accounts yet" action={{ label: "Add an account", onClick: () => navigate("/payments?tab=instruments") }} />
+          <EmptyState icon={Landmark} title="No farm accounts yet" action={{ label: "Add an account", onClick: () => navigate("/finance?tab=accounts") }} />
         ) : (
           <ul className="flex flex-col divide-y">
             {accounts.map((a) => {
@@ -253,7 +254,7 @@ function AccountsCard() {
             </li>
           </ul>
         )}
-        <Link to="/payments?tab=instruments" className="mt-3 inline-block text-xs font-medium text-primary underline-offset-4 hover:underline">
+        <Link to="/finance?tab=accounts" className="mt-3 inline-block text-xs font-medium text-primary underline-offset-4 hover:underline">
           Manage accounts
         </Link>
       </CardContent>
@@ -364,7 +365,7 @@ function OwedCard({
 }
 
 // ── recent movements ───────────────────────────────────────────────────────────
-const REF_LABEL: Record<string, string> = { SALE: "Sale", BIRD_SALE: "Bird sale", PURCHASE: "Purchase", EXPENSE: "Expense", PAYROLL: "Payroll" };
+const REF_LABEL: Record<string, string> = KIND_LABEL;
 const refHref = (p: Payment) =>
   p.ref_type === "SALE"
     ? `/sales/${p.ref_id}`
@@ -374,7 +375,9 @@ const refHref = (p: Payment) =>
         ? `/purchases/${p.ref_id}`
         : p.ref_type === "EXPENSE"
           ? "/finance?tab=expenses"
-          : null;
+          : p.ref_type === "LOAN"
+            ? `/finance?tab=loans&loan=${p.ref_id}`
+            : null;
 
 function RecentMovementsCard() {
   const { data, isLoading } = useGetData<Paginated<Payment>>("/payments?limit=10", ["payments", "recent"]);
@@ -388,7 +391,7 @@ function RecentMovementsCard() {
           <CardTitle className="text-base">Recent money movements</CardTitle>
           <CardDescription>The last 10 payments in and out</CardDescription>
         </div>
-        <Link to="/payments" className="text-xs font-medium text-primary underline-offset-4 hover:underline">
+        <Link to="/finance?tab=cash-book" className="text-xs font-medium text-primary underline-offset-4 hover:underline">
           All payments
         </Link>
       </CardHeader>
@@ -410,7 +413,8 @@ function RecentMovementsCard() {
                     </span>
                     <span className="min-w-0">
                       <span className="block truncate">
-                        {incoming ? "Received" : "Paid"} for{" "}
+                        {/* Owner money, other and transfers name themselves; a bill or loan is paid "for" something. */}
+                        {NO_BILL_KINDS.includes(p.ref_type as NoBillKind) ? "" : `${incoming ? "Received" : "Paid"} for `}
                         {href ? (
                           <Link to={href} className="font-medium underline-offset-4 hover:underline">
                             {REF_LABEL[p.ref_type] ?? p.ref_type}

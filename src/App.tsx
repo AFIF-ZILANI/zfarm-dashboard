@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from "react-router";
+import { Navigate, Route, Routes, useSearchParams } from "react-router";
 import { AppShell } from "@/components/layout/app-shell";
 import { RequireAdminReady, RequireAuth } from "@/components/auth/route-guards";
 import { LoginPage } from "@/pages/auth/login-page";
@@ -26,7 +26,6 @@ import { SaleDetailPage } from "@/pages/sales/sale-detail-page";
 import { SaleCreatePage } from "@/pages/sales/sale-create-page";
 import { BirdSaleDetailPage } from "@/pages/sales/bird-sale-detail-page";
 import { BirdSaleCreatePage } from "@/pages/sales/bird-sale-create-page";
-import { PaymentsPage } from "@/pages/payments/payments-page";
 import { FinancePage } from "@/pages/finance/finance-page";
 import { EmployeesListPage } from "@/pages/employees/employees-list-page";
 import { EmployeeDetailPage } from "@/pages/employees/employee-detail-page";
@@ -38,6 +37,12 @@ import { AuditLogPage } from "@/pages/audit-log/audit-log-page";
 import { SettingsPage } from "@/pages/settings/settings-page";
 import { BonusesListPage } from "@/pages/bonuses/bonuses-list-page";
 import { BonusEventDetailPage } from "@/pages/bonuses/bonus-event-detail-page";
+
+/** /payments?tab=instruments → /finance?tab=accounts, anything else → the cash book. */
+function PaymentsRedirect() {
+  const [params] = useSearchParams();
+  return <Navigate to={`/finance?tab=${params.get("tab") === "instruments" ? "accounts" : "cash-book"}`} replace />;
+}
 
 function App() {
   return (
@@ -71,7 +76,8 @@ function App() {
             <Route path="purchases/new" element={<PurchaseCreatePage />} />
             <Route path="purchases/low-stock" element={<LowStockPurchasePage />} />
             <Route path="purchases/:id" element={<PurchaseDetailPage />} />
-            <Route path="payments" element={<PaymentsPage />} />
+            {/* Payments moved into Finance: old links and bookmarks still land on the right tab. */}
+            <Route path="payments" element={<PaymentsRedirect />} />
             <Route path="finance" element={<FinancePage />} />
             <Route path="tasks" element={<TasksPage />} />
             <Route path="employees" element={<EmployeesListPage />} />

@@ -15,7 +15,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQueryClient } from "@tanstack/react-query";
 import { useOutstanding } from "@/pages/sales/use-outstanding";
@@ -30,11 +39,31 @@ import type { Expense } from "@/pages/finance/types";
 import type { Purchase } from "@/pages/purchases/types";
 import type { Sale, BirdSale } from "@/pages/sales/types";
 import { paymentStatus } from "@/pages/sales/types";
-import { PAYMENT_REF_TYPES, type Payment, type PaymentInstrument, type PaymentRefType } from "@/pages/payments/types";
+import {
+  KIND_LABEL,
+  NO_BILL_KINDS,
+  PAYMENT_REF_TYPES,
+  type NoBillKind,
+  type Payment,
+  type PaymentInstrument,
+  type PaymentKind,
+  type PaymentRefType,
+} from "@/pages/payments/types";
 import { farmToday } from "@/lib/farm-day";
 
-/** Money coming in from a customer has no account of ours to leave, so it names only where it landed. */
-const INCOMING_REF_TYPES: readonly PaymentRefType[] = ["SALE", "BIRD_SALE"];
+/** Money coming in has no account of ours to leave, so it names only where it landed. */
+const INCOMING_KINDS: readonly PaymentKind[] = ["SALE", "BIRD_SALE", "OWNER_CAPITAL", "OTHER_IN"];
+const isBill = (k: PaymentKind | undefined): k is PaymentRefType =>
+  !!k && (PAYMENT_REF_TYPES as readonly string[]).includes(k);
+
+/** What the dialog says for money with no bill behind it. */
+const NO_BILL_HINT: Record<NoBillKind, string> = {
+  OWNER_CAPITAL: "Your own money put into the farm. Not income: it doesn't change profit.",
+  OWNER_DRAW: "Money taken out of the farm for yourself. Not a cost: it doesn't change profit.",
+  OTHER_IN: "Money in that isn't a sale, a loan or your own capital.",
+  OTHER_OUT: "Money out that isn't a bill, a loan installment or a draw.",
+  TRANSFER: "Moved between two of the farm's own accounts. Neither money in nor out.",
+};
 
 const REF_NOUN: Record<PaymentRefType, string> = {
   SALE: "Sale",
@@ -43,17 +72,30 @@ const REF_NOUN: Record<PaymentRefType, string> = {
   EXPENSE: "Expense",
 };
 
-const paymentSchema = z.object({
-  ref_type: z.enum(PAYMENT_REF_TYPES, "Select what this pays"),
-  ref_id: z.string().min(1, "Select a record to pay"),
-  amount: z.coerce.number().positive("Enter an amount above 0"),
-  payment_date: z.string().min(1, "Payment date is required"),
-  // One of the farm's accounts, on the side the money moved: where it landed (money in) or where it
-  // left from (money out). The other party is whoever the record names -- never an account here.
-  account_id: z.string().min(1, "Select the farm account"),
-  transaction_ref: z.string().trim().optional(),
-  note: z.string().trim().optional(),
-});
+const paymentSchema = z
+  .object({
+    ref_type: z.enum([...PAYMENT_REF_TYPES, ...NO_BILL_KINDS], "Select what this is"),
+    // Only a bill has a record to pick.
+    ref_id: z.string(),
+    amount: z.coerce.number().positive("Enter an amount above 0"),
+    payment_date: z.string().min(1, "Payment date is required"),
+    // One of the farm's accounts, on the side the money moved: where it landed (money in) or where it
+    // left from (money out). The other party is whoever the record names -- never an account here.
+    // A transfer is the exception: this is where it left, to_account_id where it went.
+    account_id: z.string().min(1, "Select the farm account"),
+    to_account_id: z.string(),
+    transaction_ref: z.string().trim().optional(),
+    note: z.string().trim().optional(),
+  })
+  .superRefine((v, ctx) => {
+    const issue = (path: string, message: string) => ctx.addIssue({ code: "custom", path: [path], message });
+    if (isBill(v.ref_type) && !v.ref_id) issue("ref_id", "Select a record to pay");
+    if (v.ref_type === "TRANSFER") {
+      if (!v.to_account_id) issue("to_account_id", "Select the account it went to");
+      else if (v.to_account_id === v.account_id) issue("to_account_id", "Pick a different account");
+    }
+    if ((v.ref_type === "OTHER_IN" || v.ref_type === "OTHER_OUT") && !v.note) issue("note", "Say what this money was");
+  });
 
 type PaymentFormInput = z.input<typeof paymentSchema>;
 type PaymentFormValues = z.output<typeof paymentSchema>;
@@ -66,6 +108,7 @@ function blankPayment(defaults?: { ref_type?: PaymentRefType; ref_id?: string })
     amount: "",
     payment_date: farmToday(),
     account_id: "",
+    to_account_id: "",
     transaction_ref: "",
     note: "",
   };
@@ -185,10 +228,13 @@ export function PaymentCreateDialog({ open, onOpenChange, defaultRefType, defaul
     if (open) reset(blankPayment({ ref_type: defaultRefType, ref_id: defaultRefId }));
   }, [open, reset, defaultRefType, defaultRefId]);
 
-  const refType = useWatch({ control, name: "ref_type" }) as PaymentRefType | undefined;
+  const kind = useWatch({ control, name: "ref_type" }) as PaymentKind | undefined;
+  // Only a bill has a record to pick, a balance and a payment history.
+  const refType = isBill(kind) ? kind : undefined;
+  const transfer = kind === "TRANSFER";
   const refId = useWatch({ control, name: "ref_id" });
   const amount = Number(useWatch({ control, name: "amount" })) || 0;
-  const incoming = !!refType && INCOMING_REF_TYPES.includes(refType);
+  const incoming = !!kind && INCOMING_KINDS.includes(kind);
   const { options: refOptions, loading: refsLoading } = useRefOptions(refType, defaultRefId);
   const selected = refOptions.find((r) => r.id === refId);
   const fullyPaid = !!selected && selected.due <= 0;
@@ -217,12 +263,15 @@ export function PaymentCreateDialog({ open, onOpenChange, defaultRefType, defaul
       setError("amount", { message: `Only ${formatTk(selected.due)} is due` });
       return;
     }
-    const { account_id, ...rest } = values;
+    const { account_id, to_account_id, ref_id, ...rest } = values;
     const payload = {
       ...rest,
-      ...(INCOMING_REF_TYPES.includes(values.ref_type)
-        ? { to_instrument_id: account_id }
-        : { from_instrument_id: account_id }),
+      ...(isBill(values.ref_type) && { ref_id }),
+      ...(values.ref_type === "TRANSFER"
+        ? { from_instrument_id: account_id, to_instrument_id: to_account_id }
+        : INCOMING_KINDS.includes(values.ref_type)
+          ? { to_instrument_id: account_id }
+          : { from_instrument_id: account_id }),
       transaction_ref: values.transaction_ref || undefined,
       note: values.note || undefined,
     };
@@ -235,7 +284,9 @@ export function PaymentCreateDialog({ open, onOpenChange, defaultRefType, defaul
         }
         const left = selected ? selected.due - values.amount : 0;
         toast.success(
-          left <= 0.005
+          !isBill(values.ref_type)
+            ? `${formatTk(values.amount)} recorded as ${KIND_LABEL[values.ref_type].toLowerCase()}`
+            : left <= 0.005
             ? `${formatTk(values.amount)} recorded -- fully paid`
             : `${formatTk(values.amount)} recorded -- ${formatTk(left)} still due`,
         );
@@ -243,7 +294,10 @@ export function PaymentCreateDialog({ open, onOpenChange, defaultRefType, defaul
       },
       onError: (error) => {
         const message =
-          error.fieldError("amount") ?? error.fieldError("from_instrument_id") ?? error.fieldError("to_instrument_id");
+          error.fieldError("amount") ??
+          error.fieldError("from_instrument_id") ??
+          error.fieldError("to_instrument_id") ??
+          error.fieldError("note");
         toast.error(message ?? error.message);
       },
     });
@@ -258,7 +312,13 @@ export function PaymentCreateDialog({ open, onOpenChange, defaultRefType, defaul
         <DialogHeader>
           <DialogTitle>{refType && locked ? `Record payment for this ${REF_NOUN[refType].toLowerCase()}` : "Record payment"}</DialogTitle>
           <DialogDescription>
-            {incoming ? "Money received from the buyer." : refType ? "Money paid out by the farm." : "Choose what this payment is for."}
+            {kind && !isBill(kind)
+              ? NO_BILL_HINT[kind]
+              : incoming
+                ? "Money received from the buyer."
+                : refType
+                  ? "Money paid out by the farm."
+                  : "Choose what this payment is for."}
           </DialogDescription>
         </DialogHeader>
 
@@ -267,7 +327,7 @@ export function PaymentCreateDialog({ open, onOpenChange, defaultRefType, defaul
           {!locked && (
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="ref_type">Pays for</Label>
+                <Label htmlFor="ref_type">What is it</Label>
                 <Controller
                   control={control}
                   name="ref_type"
@@ -280,20 +340,33 @@ export function PaymentCreateDialog({ open, onOpenChange, defaultRefType, defaul
                       }}
                     >
                       <SelectTrigger id="ref_type" className="w-full" aria-invalid={!!errors.ref_type}>
-                        <SelectValue>{(v: PaymentRefType) => (v ? REF_NOUN[v] : "Select type")}</SelectValue>
+                        <SelectValue>{(v: PaymentKind) => (v ? KIND_LABEL[v] : "Select type")}</SelectValue>
                       </SelectTrigger>
                       <SelectContent>
-                        {PAYMENT_REF_TYPES.map((t) => (
-                          <SelectItem key={t} value={t}>
-                            {REF_NOUN[t]}
-                          </SelectItem>
-                        ))}
+                        <SelectGroup>
+                          <SelectLabel>Pays a bill</SelectLabel>
+                          {PAYMENT_REF_TYPES.map((t) => (
+                            <SelectItem key={t} value={t}>
+                              {REF_NOUN[t]}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                        <SelectSeparator />
+                        <SelectGroup>
+                          <SelectLabel>No bill</SelectLabel>
+                          {NO_BILL_KINDS.map((t) => (
+                            <SelectItem key={t} value={t}>
+                              {KIND_LABEL[t]}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
                       </SelectContent>
                     </Select>
                   )}
                 />
                 {errors.ref_type && <p className="text-xs text-destructive">{errors.ref_type.message}</p>}
               </div>
+              {(refType || !kind) && (
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="ref_id">Record</Label>
                 <Controller
@@ -321,6 +394,7 @@ export function PaymentCreateDialog({ open, onOpenChange, defaultRefType, defaul
                 />
                 {errors.ref_id && <p className="text-xs text-destructive">{errors.ref_id.message}</p>}
               </div>
+              )}
             </div>
           )}
 
@@ -464,7 +538,7 @@ export function PaymentCreateDialog({ open, onOpenChange, defaultRefType, defaul
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="account_id">{incoming ? "Received into" : "Paid from"}</Label>
+                  <Label htmlFor="account_id">{transfer ? "From account" : incoming ? "Received into" : "Paid from"}</Label>
                   <Controller
                     control={control}
                     name="account_id"
@@ -479,15 +553,35 @@ export function PaymentCreateDialog({ open, onOpenChange, defaultRefType, defaul
                   />
                   {errors.account_id && <p className="text-xs text-destructive">{errors.account_id.message}</p>}
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="transaction_ref">Transaction ref (optional)</Label>
-                  <Input id="transaction_ref" placeholder="Cheque no., bKash TrxID…" {...register("transaction_ref")} />
-                </div>
+                {transfer ? (
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="to_account_id">To account</Label>
+                    <Controller
+                      control={control}
+                      name="to_account_id"
+                      render={({ field }) => (
+                        <FarmAccountSelect
+                          id="to_account_id"
+                          value={field.value ?? ""}
+                          onChange={field.onChange}
+                          invalid={!!errors.to_account_id}
+                        />
+                      )}
+                    />
+                    {errors.to_account_id && <p className="text-xs text-destructive">{errors.to_account_id.message}</p>}
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="transaction_ref">Transaction ref (optional)</Label>
+                    <Input id="transaction_ref" placeholder="Cheque no., bKash TrxID…" {...register("transaction_ref")} />
+                  </div>
+                )}
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="note">Note (optional)</Label>
-                <Input id="note" {...register("note")} />
+                <Label htmlFor="note">{kind === "OTHER_IN" || kind === "OTHER_OUT" ? "What was it" : "Note (optional)"}</Label>
+                <Input id="note" {...register("note")} aria-invalid={!!errors.note} />
+                {errors.note && <p className="text-xs text-destructive">{errors.note.message}</p>}
               </div>
             </>
           )}

@@ -11,6 +11,7 @@ import {
   ShoppingBag,
   Wallet,
   Landmark,
+  HandCoins,
   UserCog,
   ShieldCheck,
   HeartPulse,
@@ -121,20 +122,14 @@ export const OPERATIONAL_NAV: NavItem[] = [
   },
   { to: "/purchases", label: "Purchases", icon: ShoppingBag },
   {
-    to: "/payments",
-    label: "Payments",
-    icon: Wallet,
-    children: [
-      tab("/payments", "payments", "Payments", Wallet),
-      tab("/payments", "instruments", "Farm accounts", CreditCard),
-    ],
-  },
-  {
     to: "/finance",
     label: "Finance",
     icon: Landmark,
     children: [
       tab("/finance", "overview", "Overview", ChartColumn),
+      tab("/finance", "cash-book", "Cash book", Wallet),
+      tab("/finance", "accounts", "Farm accounts", CreditCard),
+      tab("/finance", "loans", "Loans", HandCoins),
       tab("/finance", "expenses", "Expenses", Receipt),
       tab("/finance", "depreciation", "Depreciation", TrendingDown),
       tab("/finance", "shared-costs", "Shared costs", Split),
