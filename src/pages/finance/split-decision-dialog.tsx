@@ -63,7 +63,7 @@ function Decision({ batch, overview, onClose }: { batch: SplitWaiting; overview:
   const field = (key: keyof Pct, label: string, amount: number, note?: string) => (
     <div className="grid grid-cols-[1fr_6rem_8rem] items-center gap-3 px-3 py-2">
       <Label htmlFor={`pct_${key}`} className="block">
-        <span className="block text-sm">{label}</span>
+        <span className="block text-sm">{label} (%)</span>
         {note && <span className="block text-xs font-normal text-muted-foreground">{note}</span>}
       </Label>
       <NumericInput
