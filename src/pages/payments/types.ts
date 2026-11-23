@@ -11,8 +11,8 @@ export const NO_BILL_KINDS = ["OWNER_CAPITAL", "OWNER_DRAW", "OTHER_IN", "OTHER_
 export type NoBillKind = (typeof NO_BILL_KINDS)[number];
 /** What a payment can be recorded as from the Record payment dialog. */
 export type PaymentKind = PaymentRefType | NoBillKind;
-/** Every kind a stored row can carry: PAYROLL comes from payouts, LOAN from the Loans tab. */
-export type StoredPaymentKind = PaymentKind | "PAYROLL" | "LOAN";
+/** Every kind a stored row can carry: PAYROLL comes from payouts, LOAN from the Loans tab, SUPPLIER_* from Pay supplier. */
+export type StoredPaymentKind = PaymentKind | "PAYROLL" | "LOAN" | "SUPPLIER_OPENING" | "SUPPLIER_ADVANCE";
 
 export const KIND_LABEL: Record<StoredPaymentKind, string> = {
   SALE: "Sale",
@@ -26,6 +26,8 @@ export const KIND_LABEL: Record<StoredPaymentKind, string> = {
   OTHER_IN: "Other money in",
   OTHER_OUT: "Other money out",
   TRANSFER: "Transfer between accounts",
+  SUPPLIER_OPENING: "Supplier old balance",
+  SUPPLIER_ADVANCE: "Supplier advance",
 };
 
 export const PAYMENT_METHODS = ["CASH", "BANK_TRANSFER", "MFS"] as const;
@@ -48,6 +50,8 @@ export type Payment = {
   transaction_ref: string | null;
   handled_by_id: string | null;
   note: string | null;
+  /** The one amount handed to a supplier that this row is part of. */
+  supplier_payment_id: string | null;
   created_at: string;
 };
 

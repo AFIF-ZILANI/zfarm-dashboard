@@ -80,6 +80,8 @@ export type FinancePeriod = {
   payables: number;
   /** what is still owed on loans: their totals (principal + interest) less installments paid */
   loans_owed: number;
+  /** paid to suppliers ahead of their goods, not used yet; never netted off payables */
+  supplier_advances: number;
   cost_breakdown: CostLine[];
 };
 export type FinanceSummary = { current: FinancePeriod; previous: FinancePeriod };
