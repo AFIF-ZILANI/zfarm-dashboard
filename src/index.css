@@ -18,7 +18,7 @@
   body {
     background: #fff !important;
   }
-  body > *:not(#printable-codes) {
+  body > *:not(#printable-codes):not(#printable-statement) {
     display: none !important;
   }
   #printable-codes {
@@ -40,6 +40,17 @@
     background: #fff;
     overflow: visible;
     max-height: none;
+  }
+  /* Supplier statement (pages/suppliers/statement-card.tsx), hoisted the same way. */
+  #printable-statement {
+    color: #000;
+    background: #fff;
+  }
+  #printable-statement button {
+    display: none;
+  }
+  #printable-statement tr {
+    break-inside: avoid;
   }
   .print-cell {
     width: 19mm;
