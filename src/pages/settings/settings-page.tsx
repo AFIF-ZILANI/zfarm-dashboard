@@ -6,6 +6,7 @@ import {
   UserRound,
   Layers,
   Package,
+  PieChart,
   Ruler,
   Smartphone,
   Syringe,
@@ -22,6 +23,7 @@ import { RoleSalaryCard } from "@/pages/settings/role-salary-card";
 import { VaccineTemplatesTab } from "@/pages/settings/vaccine-templates-tab";
 import { FarmDayCard } from "@/pages/settings/farm-day-card";
 import { SettlementCard } from "@/pages/settings/settlement-card";
+import { SplitCard } from "@/pages/settings/split-card";
 
 type Section = { id: string; label: string; description: string; icon: LucideIcon; content: ReactNode };
 type Group = { label: string; sections: Section[] };
@@ -82,6 +84,13 @@ const GROUPS: Group[] = [
         description: "How long sold batches stay open.",
         icon: CalendarClock,
         content: <SettlementCard />,
+      },
+      {
+        id: "profit-split",
+        label: "Profit split",
+        description: "How a closed batch's profit is shared.",
+        icon: PieChart,
+        content: <SplitCard />,
       },
     ],
   },

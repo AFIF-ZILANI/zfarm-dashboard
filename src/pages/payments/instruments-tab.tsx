@@ -10,7 +10,7 @@ import { useConfirm } from "@/components/shared/confirm-dialog";
 import { humanizeEnum } from "@/lib/utils";
 import { InstrumentBalanceCell } from "@/pages/payments/instrument-balance-cell";
 import { InstrumentFormDialog } from "@/pages/payments/instrument-form-dialog";
-import type { PaymentInstrument } from "@/pages/payments/types";
+import { FUND_LABEL, type PaymentInstrument } from "@/pages/payments/types";
 
 export function InstrumentsTab() {
   const [formOpen, setFormOpen] = useState(false);
@@ -72,6 +72,7 @@ export function InstrumentsTab() {
     { key: "type", header: "Type", render: (i) => humanizeEnum(i.type) },
     { key: "detail", header: "Detail", render: (i) => i.bank_name ?? i.mobile_no ?? "—" },
     { key: "balance", header: "Balance", render: (i) => <InstrumentBalanceCell instrumentId={i.id} />, numeric: true },
+    { key: "fund", header: "Fund", render: (i) => FUND_LABEL[i.fund] },
     {
       key: "status",
       header: "Status",

@@ -22,6 +22,9 @@ import {
   MFS_TYPES,
   PAYMENT_METHODS,
   type PaymentInstrument,
+  FUNDS,
+  FUND_LABEL,
+  type Fund,
 } from "@/pages/payments/types";
 
 const instrumentSchema = z.object({
@@ -31,6 +34,7 @@ const instrumentSchema = z.object({
   account_no: z.string().trim().optional(),
   mobile_no: z.string().trim().optional(),
   mfs_type: z.enum(MFS_TYPES).optional(),
+  fund: z.enum(FUNDS),
 });
 
 type InstrumentFormValues = z.infer<typeof instrumentSchema>;
@@ -43,6 +47,7 @@ function blankInstrument(): InstrumentFormValues {
     account_no: "",
     mobile_no: "",
     mfs_type: undefined,
+    fund: "OPERATING",
   };
 }
 
@@ -54,6 +59,7 @@ function toFormValues(instrument: PaymentInstrument): InstrumentFormValues {
     account_no: instrument.account_no ?? "",
     mobile_no: instrument.mobile_no ?? "",
     mfs_type: instrument.mfs_type ?? undefined,
+    fund: instrument.fund,
   };
 }
 
@@ -192,6 +198,32 @@ export function InstrumentFormDialog({ open, onOpenChange, instrument }: Instrum
               </div>
             </div>
           )}
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="fund">Fund</Label>
+            <Controller
+              control={control}
+              name="fund"
+              render={({ field }) => (
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <SelectTrigger id="fund" className="w-full">
+                    <SelectValue>{(v: Fund) => FUND_LABEL[v]}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {FUNDS.map((f) => (
+                      <SelectItem key={f} value={f}>
+                        {FUND_LABEL[f]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+            <p className="text-xs text-muted-foreground">
+              Operating is the money you run the farm with. Reinvestment and Reserve hold profit set aside, one account each. It can't be changed
+              once money has moved through the account.
+            </p>
+          </div>
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

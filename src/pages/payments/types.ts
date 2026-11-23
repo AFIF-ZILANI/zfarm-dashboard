@@ -7,7 +7,7 @@ export const PAYMENT_REF_TYPES = ["SALE", "BIRD_SALE", "PURCHASE", "EXPENSE"] as
 export type PaymentRefType = (typeof PAYMENT_REF_TYPES)[number];
 
 /** Cash-book money with no bill behind it. A TRANSFER moves between two of the farm's own accounts. */
-export const NO_BILL_KINDS = ["OWNER_CAPITAL", "OWNER_DRAW", "OTHER_IN", "OTHER_OUT", "TRANSFER"] as const;
+export const NO_BILL_KINDS = ["OWNER_CAPITAL", "OWNER_DRAW", "OTHER_IN", "OTHER_OUT", "TRANSFER", "TAX_PAID"] as const;
 export type NoBillKind = (typeof NO_BILL_KINDS)[number];
 /** What a payment can be recorded as from the Record payment dialog. */
 export type PaymentKind = PaymentRefType | NoBillKind;
@@ -26,6 +26,7 @@ export const KIND_LABEL: Record<StoredPaymentKind, string> = {
   OTHER_IN: "Other money in",
   OTHER_OUT: "Other money out",
   TRANSFER: "Transfer between accounts",
+  TAX_PAID: "Tax paid",
   SUPPLIER_OPENING: "Supplier old balance",
   SUPPLIER_ADVANCE: "Supplier advance",
 };
@@ -35,6 +36,8 @@ export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
 export const MFS_TYPES = ["BKASH", "NAGAD", "ROCKET"] as const;
 export type MfsType = (typeof MFS_TYPES)[number];
+
+export type SplitMove = "TO_REINVEST" | "TO_RESERVE" | "FROM_RESERVE";
 
 export type Payment = {
   id: string;
@@ -52,8 +55,15 @@ export type Payment = {
   note: string | null;
   /** The one amount handed to a supplier that this row is part of. */
   supplier_payment_id: string | null;
+  /** Set on a transfer that carries out a profit split. */
+  split_move: SplitMove | null;
   created_at: string;
 };
+
+/** Which pot an account's money belongs to. Only OPERATING is cash the farm can spend. */
+export const FUNDS = ["OPERATING", "REINVEST", "RESERVE"] as const;
+export type Fund = (typeof FUNDS)[number];
+export const FUND_LABEL: Record<Fund, string> = { OPERATING: "Operating", REINVEST: "Reinvestment", RESERVE: "Reserve" };
 
 /** One of the farm's own accounts (Cash, a bank account, a mobile wallet). */
 export type PaymentInstrument = {
@@ -65,6 +75,7 @@ export type PaymentInstrument = {
   mobile_no: string | null;
   mfs_type: MfsType | null;
   is_active: boolean;
+  fund: Fund;
   created_at: string;
 };
 

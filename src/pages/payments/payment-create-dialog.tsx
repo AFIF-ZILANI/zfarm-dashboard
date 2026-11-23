@@ -35,7 +35,8 @@ import { useGetData, usePostData, type Paginated } from "@/lib/api";
 import { cn, formatDate, formatTk, humanizeEnum } from "@/lib/utils";
 import type { Batch } from "@/pages/batches/types";
 import type { Customer } from "@/pages/customers/types";
-import { settledElsewhere, type Expense } from "@/pages/finance/types";
+import { moveWarning } from "@/pages/finance/profit-split-math";
+import { settledElsewhere, type Expense, type ProfitSplitOverview } from "@/pages/finance/types";
 import type { Purchase } from "@/pages/purchases/types";
 import type { Sale, BirdSale } from "@/pages/sales/types";
 import { paymentStatus } from "@/pages/sales/types";
@@ -63,6 +64,7 @@ const NO_BILL_HINT: Record<NoBillKind, string> = {
   OTHER_IN: "Money in that isn't a sale, a loan or your own capital.",
   OTHER_OUT: "Money out that isn't a bill, a loan installment or a draw.",
   TRANSFER: "Moved between two of the farm's own accounts. Neither money in nor out.",
+  TAX_PAID: "Income tax or a regulatory fee. It uses the tax money held in the reserve and isn't a cost of any batch.",
 };
 
 const REF_NOUN: Record<PaymentRefType, string> = {
@@ -100,7 +102,7 @@ const paymentSchema = z
 type PaymentFormInput = z.input<typeof paymentSchema>;
 type PaymentFormValues = z.output<typeof paymentSchema>;
 
-function blankPayment(defaults?: { ref_type?: PaymentRefType; ref_id?: string }): PaymentFormInput {
+function blankPayment(defaults?: { ref_type?: PaymentKind; ref_id?: string }): PaymentFormInput {
   const ref_type = (defaults?.ref_type ?? undefined) as unknown as PaymentFormInput["ref_type"];
   return {
     ref_type,
@@ -208,9 +210,11 @@ type PaymentCreateDialogProps = {
   /** Opened from a record's own row or page: the payment is for that record and it can't be changed. */
   defaultRefType?: PaymentRefType;
   defaultRefId?: string;
+  /** Opened for one kind of money with no bill (an owner draw): preselected, can still be changed. */
+  defaultKind?: PaymentKind;
 };
 
-export function PaymentCreateDialog({ open, onOpenChange, defaultRefType, defaultRefId }: PaymentCreateDialogProps) {
+export function PaymentCreateDialog({ open, onOpenChange, defaultRefType, defaultRefId, defaultKind }: PaymentCreateDialogProps) {
   const locked = !!defaultRefType && !!defaultRefId;
   const {
     control,
@@ -222,12 +226,12 @@ export function PaymentCreateDialog({ open, onOpenChange, defaultRefType, defaul
     formState: { errors, isSubmitting },
   } = useForm<PaymentFormInput, unknown, PaymentFormValues>({
     resolver: zodResolver(paymentSchema),
-    defaultValues: blankPayment({ ref_type: defaultRefType, ref_id: defaultRefId }),
+    defaultValues: blankPayment({ ref_type: defaultRefType ?? defaultKind, ref_id: defaultRefId }),
   });
 
   useEffect(() => {
-    if (open) reset(blankPayment({ ref_type: defaultRefType, ref_id: defaultRefId }));
-  }, [open, reset, defaultRefType, defaultRefId]);
+    if (open) reset(blankPayment({ ref_type: defaultRefType ?? defaultKind, ref_id: defaultRefId }));
+  }, [open, reset, defaultRefType, defaultRefId, defaultKind]);
 
   const kind = useWatch({ control, name: "ref_type" }) as PaymentKind | undefined;
   // Only a bill has a record to pick, a balance and a payment history.
@@ -253,6 +257,10 @@ export function PaymentCreateDialog({ open, onOpenChange, defaultRefType, defaul
     "payment-instruments",
     "all",
   ]);
+  // A draw leaves the farm's own money: the same warning as moving some to a fund.
+  const draw = kind === "OWNER_DRAW";
+  const { data: split } = useGetData<ProfitSplitOverview>("/profit-splits", ["profit-splits"], { enabled: open && draw });
+  const drawWarning = draw && split ? moveWarning(amount, parseFloat(split.spendable_cash)) : null;
   const accountName = (p: Payment) =>
     accounts?.results.find((a) => a.id === (p.to_instrument_id ?? p.from_instrument_id))?.label ?? "—";
 
@@ -280,7 +288,7 @@ export function PaymentCreateDialog({ open, onOpenChange, defaultRefType, defaul
       onSuccess: () => {
         // A payment changes what the record still owes, the summaries and KPI tiles that read it, and the
         // account balance it moved.
-        for (const key of ["sales", "bird-sales", "purchases", "expenses", "analytics", "payment-instruments"]) {
+        for (const key of ["sales", "bird-sales", "purchases", "expenses", "analytics", "payment-instruments", "profit-splits"]) {
           void queryClient.invalidateQueries({ queryKey: [key] });
         }
         const left = selected ? selected.due - values.amount : 0;
@@ -578,6 +586,8 @@ export function PaymentCreateDialog({ open, onOpenChange, defaultRefType, defaul
                   </div>
                 )}
               </div>
+
+              {drawWarning && <p className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning">{drawWarning}</p>}
 
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="note">{kind === "OTHER_IN" || kind === "OTHER_OUT" ? "What was it" : "Note (optional)"}</Label>
