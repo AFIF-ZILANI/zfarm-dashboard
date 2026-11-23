@@ -252,7 +252,7 @@ export function PurchaseCreatePage() {
     }
     setPaymentError(null);
     if (payment.status === "PAID" && netTotalPreview > 0 && advanceUsed >= netTotalPreview) {
-      setPaymentError("The advance covers this bill. Pick \"Unpaid\" for the rest.");
+      setPaymentError("The advance covers this bill, so nothing is paid now. Choose \"Unpaid\".");
       return;
     }
     if (payment.status !== "UNPAID") {

@@ -60,7 +60,7 @@ export function chickProblem(chicks: ChickPurchase, defaultBilled: number, hasWa
   if (!Number.isInteger(billed) || billed <= 0) return "Enter how many chicks were billed.";
   if (!hasWarehouse) return "Add a warehouse first — every purchase is filed under one.";
   if (chicks.status !== "UNPAID") {
-    if (chicks.status === "PAID" && advanceUsed >= total) return "The advance covers this bill. Pick “Unpaid” for the rest.";
+    if (chicks.status === "PAID" && advanceUsed >= total) return "The advance covers this bill, so nothing is paid now. Choose “Unpaid”.";
     if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) return "Enter a valid payment amount.";
     if (chicks.status === "PARTIAL" && paymentAmount >= total)
       return 'A partial payment must be less than the total — pick "Paid in full" instead.';

@@ -20,7 +20,7 @@ test("the advance comes off what's paid now", () => {
 test("an advance that covers the whole bill leaves nothing to pay now", () => {
   const all = chicks({ status: "PAID", from_instrument_id: "a" });
   expect(chickTotals(all, 0, 9000)).toMatchObject({ advanceUsed: 5000, paymentAmount: 0 });
-  expect(chickProblem(all, 0, true, 9000)).toBe("The advance covers this bill. Pick “Unpaid” for the rest.");
+  expect(chickProblem(all, 0, true, 9000)).toBe("The advance covers this bill, so nothing is paid now. Choose “Unpaid”.");
   expect(chickProblem(chicks(), 0, true, 9000)).toBeNull();
 });
 test("partial payments are still checked against the total", () => {
