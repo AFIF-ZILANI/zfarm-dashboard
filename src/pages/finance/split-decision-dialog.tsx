@@ -45,7 +45,14 @@ function Decision({ batch, overview, onClose }: { batch: SplitWaiting; overview:
   const save = () => {
     if (problem) return;
     void decide.mutate(
-      { batch_id: batch.batch_id, expected_profit: profit, ...(!isLoss && { pct }) },
+      {
+        batch_id: batch.batch_id,
+        expected_profit: profit,
+        expected: isLoss
+          ? { recovered: 0, principal_taken: 0, loss_covered: loss.covered }
+          : { recovered: s.recovered, principal_taken: s.principalTaken, loss_covered: 0 },
+        ...(!isLoss && { pct }),
+      },
       {
         onSuccess: () => {
           refresh();
@@ -53,7 +60,7 @@ function Decision({ batch, overview, onClose }: { batch: SplitWaiting; overview:
           onClose();
         },
         onError: (error) => {
-          refresh(); // most likely the profit changed: show the new one
+          refresh(); // most likely the figures changed: show the new ones
           toast.error(Object.values(error.fields ?? {})[0] ?? error.message);
         },
       }

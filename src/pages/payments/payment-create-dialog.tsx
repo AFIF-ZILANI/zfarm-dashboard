@@ -35,7 +35,8 @@ import { useGetData, usePostData, type Paginated } from "@/lib/api";
 import { cn, formatDate, formatTk, humanizeEnum } from "@/lib/utils";
 import type { Batch } from "@/pages/batches/types";
 import type { Customer } from "@/pages/customers/types";
-import { settledElsewhere, type Expense } from "@/pages/finance/types";
+import { moveWarning } from "@/pages/finance/profit-split-math";
+import { settledElsewhere, type Expense, type ProfitSplitOverview } from "@/pages/finance/types";
 import type { Purchase } from "@/pages/purchases/types";
 import type { Sale, BirdSale } from "@/pages/sales/types";
 import { paymentStatus } from "@/pages/sales/types";
@@ -256,6 +257,10 @@ export function PaymentCreateDialog({ open, onOpenChange, defaultRefType, defaul
     "payment-instruments",
     "all",
   ]);
+  // A draw leaves the farm's own money: the same warning as moving some to a fund.
+  const draw = kind === "OWNER_DRAW";
+  const { data: split } = useGetData<ProfitSplitOverview>("/profit-splits", ["profit-splits"], { enabled: open && draw });
+  const drawWarning = draw && split ? moveWarning(amount, parseFloat(split.spendable_cash)) : null;
   const accountName = (p: Payment) =>
     accounts?.results.find((a) => a.id === (p.to_instrument_id ?? p.from_instrument_id))?.label ?? "—";
 
@@ -581,6 +586,8 @@ export function PaymentCreateDialog({ open, onOpenChange, defaultRefType, defaul
                   </div>
                 )}
               </div>
+
+              {drawWarning && <p className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning">{drawWarning}</p>}
 
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="note">{kind === "OTHER_IN" || kind === "OTHER_OUT" ? "What was it" : "Note (optional)"}</Label>

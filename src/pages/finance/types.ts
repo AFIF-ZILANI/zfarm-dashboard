@@ -238,7 +238,9 @@ export type ProfitSplitOverview = {
   done: SplitDone[];
   moves: (Payment & { split_move: SplitMove })[];
 };
-export type SplitWaiting = { batch_id: string; batch_code: string; ended_on: string | null; net_profit: string; can_decide: boolean; can_skip: boolean };
+export type SplitWaiting = { batch_id: string; batch_code: string; ended_on: string | null; net_profit: string; can_decide: boolean; can_skip: boolean; waits_for: string | null };
+/** One batch's decision, for its own page. */
+export type BatchSplit = Pick<SplitDone, "kind" | "net_profit" | "loss_covered" | "approved_at">;
 export type SplitDone = {
   id: string;
   batch_id: string;

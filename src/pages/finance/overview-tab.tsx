@@ -171,7 +171,12 @@ export function OverviewTab() {
           icon={Wallet}
           isLoading={loading}
           isError={summary.isError}
-          hint={cur && (cur.reinvest_cash !== 0 || cur.reserve_cash !== 0) ? `Apart from it: reinvestment ${formatTk(cur.reinvest_cash)}, reserve ${formatTk(cur.reserve_cash)}` : hint((p) => p.operating_cash)}
+          hint={[
+            hint((p) => p.operating_cash),
+            cur && (cur.reinvest_cash !== 0 || cur.reserve_cash !== 0) && `Apart from it: reinvestment ${formatTk(cur.reinvest_cash)}, reserve ${formatTk(cur.reserve_cash)}`,
+          ]
+            .filter(Boolean)
+            .join(". ")}
           tone={cur && cur.operating_cash < 0 ? "critical" : undefined}
         />
         <KPICard label="Revenue" money={tile((p) => p.revenue)} icon={TrendingUp} isLoading={loading} isError={summary.isError} hint={hint((p) => p.revenue)} />
@@ -233,7 +238,23 @@ function AccountsCard() {
   const { data, isLoading } = useGetData<FinancialDashboard>("/analytics/financial", ["analytics", "financial", "now"]);
   // Operating first, then the money set aside.
   const accounts = [...(data?.cash_by_instrument ?? [])].sort((a, b) => FUNDS.indexOf(a.fund) - FUNDS.indexOf(b.fund));
-  const total = accounts.reduce((sum, a) => sum + parseFloat(a.balance), 0);
+  // Set-aside money never counts as cash to spend, so the total is Operating's alone.
+  const operating = accounts.filter((a) => a.fund === "OPERATING");
+  const funds = accounts.filter((a) => a.fund !== "OPERATING");
+  const total = operating.reduce((sum, a) => sum + parseFloat(a.balance), 0);
+  const row = (a: (typeof accounts)[number]) => {
+    const balance = parseFloat(a.balance);
+    return (
+      <li key={a.instrument_id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+        <span className="flex items-center gap-2">
+          <Landmark className="size-4 text-muted-foreground" aria-hidden />
+          {a.label}
+          {a.fund !== "OPERATING" && <span className="text-xs text-muted-foreground">{FUND_LABEL[a.fund]}</span>}
+        </span>
+        <span className={cn("font-medium tabular-nums", balance < 0 && "text-critical")}>{formatTk(balance)}</span>
+      </li>
+    );
+  };
   return (
     <Card>
       <CardHeader>
@@ -247,23 +268,12 @@ function AccountsCard() {
           <EmptyState icon={Landmark} title="No farm accounts yet" action={{ label: "Add an account", onClick: () => navigate("/finance?tab=accounts") }} />
         ) : (
           <ul className="flex flex-col divide-y">
-            {accounts.map((a) => {
-              const balance = parseFloat(a.balance);
-              return (
-                <li key={a.instrument_id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
-                  <span className="flex items-center gap-2">
-                    <Landmark className="size-4 text-muted-foreground" aria-hidden />
-                    {a.label}
-                    {a.fund !== "OPERATING" && <span className="text-xs text-muted-foreground">{FUND_LABEL[a.fund]}</span>}
-                  </span>
-                  <span className={cn("font-medium tabular-nums", balance < 0 && "text-critical")}>{formatTk(balance)}</span>
-                </li>
-              );
-            })}
-            <li className="flex items-center justify-between gap-3 pt-2.5 text-sm font-semibold">
-              <span>Total</span>
+            {operating.map(row)}
+            <li className="flex items-center justify-between gap-3 py-2.5 text-sm font-semibold">
+              <span>{funds.length > 0 ? "Operating cash" : "Total"}</span>
               <span className={cn("tabular-nums", total < 0 && "text-critical")}>{formatTk(total)}</span>
             </li>
+            {funds.map(row)}
           </ul>
         )}
         <Link to="/finance?tab=accounts" className="mt-3 inline-block text-xs font-medium text-primary underline-offset-4 hover:underline">

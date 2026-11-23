@@ -8,6 +8,7 @@ import { DataTable, type Column } from "@/components/shared/data-table";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { useGetData } from "@/lib/api";
+import { farmToday } from "@/lib/farm-day";
 import { cn, formatDate, formatTk } from "@/lib/utils";
 import { MoveMoneyDialog, type MoveAsk } from "@/pages/finance/move-money-dialog";
 import { SplitDecisionDialog } from "@/pages/finance/split-decision-dialog";
@@ -63,11 +64,12 @@ export function ProfitSplitTab() {
         />
         <FundCard
           title="Reserve"
-          headline={toReserve < 0 ? "To bring back for a loss" : "To move"}
+          headline={toReserve >= 0 ? "To move" : n(data.reserve.covered) > 0 ? "To bring back for a loss" : "Moved ahead"}
           amount={Math.abs(toReserve)}
           facts={[
             ["Set aside", formatTk(n(data.reserve.set_aside))],
             ...(n(data.reserve.covered) > 0 ? ([["Paid for losses", formatTk(n(data.reserve.covered))]] as [string, string][]) : []),
+            ["Moved", signed(data.reserve.moved)],
             ["In the account", signed(data.reserve.balance)],
             ["Tax held", formatTk(n(data.reserve.tax_held))],
             ["Can pay for a loss", formatTk(n(data.reserve.available))],
@@ -152,7 +154,7 @@ export function ProfitSplitTab() {
                           {loss ? "Settle loss" : "Split"}
                         </Button>
                       ) : (
-                        <span className="text-xs text-muted-foreground">After the one above</span>
+                        <span className="text-xs text-muted-foreground">{w.waits_for ? `After batch ${w.waits_for}, once it's final` : "After the one above"}</span>
                       )}
                     </span>
                   </li>
@@ -228,7 +230,7 @@ function DoneTable({ rows, onUndo }: { rows: SplitDone[]; onUndo: (ask: ReasonAs
         <span className="block">
           <span className="font-medium">{d.batch_code}</span>
           <span className="block text-xs text-muted-foreground">
-            {formatDate(d.approved_at)} by {d.approved_by}
+            {formatDate(farmToday(new Date(d.approved_at)))} by {d.approved_by}
           </span>
         </span>
       ),

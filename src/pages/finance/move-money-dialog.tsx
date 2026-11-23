@@ -73,7 +73,7 @@ function MoveForm({ ask, spendable, onClose }: { ask: MoveAsk; spendable: number
         <DialogTitle>{TITLE[ask.move]}</DialogTitle>
         <DialogDescription>
           {back
-            ? `The reserve still owes Operating ${formatTk(ask.left)} for a loss. Record what came back from ${ask.account}.`
+            ? `The reserve holds ${formatTk(ask.left)} more than its share. Record what came back from ${ask.account}.`
             : `${formatTk(ask.left)} is set aside and not moved yet. Record what you moved to ${ask.account}.`}
         </DialogDescription>
       </DialogHeader>

@@ -163,7 +163,7 @@ export function CashFlowChart({ rows, isLoading }: { rows: FinanceMonth[]; isLoa
   return (
     <ChartCard
       title="Cash flow"
-      description="Money received and paid out per month, and the balance at month end"
+      description="Money received and paid out per month, and the balance of all accounts at month end"
       isLoading={isLoading}
       isEmpty={isEmpty}
       emptyText="No payments recorded in the last 12 months."
@@ -174,16 +174,16 @@ export function CashFlowChart({ rows, isLoading }: { rows: FinanceMonth[]; isLoa
             <XAxis dataKey="month" tickFormatter={shortMonth} {...chartAxisProps} />
             <YAxis tickFormatter={formatTkCompact} width={48} {...chartAxisProps} />
             <Tooltip contentStyle={chartTooltipContentStyle} labelFormatter={(m) => longMonth(String(m))} formatter={money} />
-            <Legend {...legendIn(["Money in", "Money out", "Balance"])} />
+            <Legend {...legendIn(["Money in", "Money out", "Balance, all accounts"])} />
             <Bar dataKey="cash_in" name="Money in" fill={IN_COLOR} radius={[4, 4, 0, 0]} maxBarSize={22} />
             <Bar dataKey="cash_out" name="Money out" fill={OUT_COLOR} radius={[4, 4, 0, 0]} maxBarSize={22} />
-            <Line type="monotone" dataKey="cash_end" name="Balance" stroke={RESULT_COLOR} strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+            <Line type="monotone" dataKey="cash_end" name="Balance, all accounts" stroke={RESULT_COLOR} strokeWidth={2} dot={{ r: 3 }} activeDot={{ r: 5 }} />
           </ComposedChart>
         </ResponsiveContainer>
       }
       table={
         <MoneyTable
-          head={["Month", "Money in", "Money out", "Balance"]}
+          head={["Month", "Money in", "Money out", "Balance, all accounts"]}
           rows={[...rows].reverse().map((r) => [longMonth(r.month), r.cash_in, r.cash_out, r.cash_end])}
         />
       }
