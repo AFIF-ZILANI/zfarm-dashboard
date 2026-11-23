@@ -10,9 +10,10 @@ import { FarmAccountSelect } from "@/components/shared/farm-account-select";
 import { NumericInput } from "@/components/utils/NumaricInput";
 import { useGetData, usePostData } from "@/lib/api";
 import { farmToday } from "@/lib/farm-day";
-import { formatDate, formatTk } from "@/lib/utils";
-import { advanceOf, splitOldestFirst, splitProblem, type Split } from "@/pages/suppliers/supplier-split";
+import { formatTk } from "@/lib/utils";
+import { SplitFields } from "@/pages/suppliers/split-fields";
 import type { SupplierDues } from "@/pages/suppliers/supplier-money-types";
+import { useSplit } from "@/pages/suppliers/use-split";
 import { useRefreshSupplierMoney } from "@/pages/suppliers/use-refresh-supplier-money";
 
 type Props = { supplierId: string; supplierName: string; open: boolean; onOpenChange: (open: boolean) => void };
@@ -49,32 +50,12 @@ function PayForm({ supplierId, supplierName, dues, onDone }: { supplierId: strin
   const [account, setAccount] = useState("");
   const [ref, setRef] = useState("");
   const [note, setNote] = useState("");
-  // Null until the owner changes a part: then their split stands, whatever amount is typed after.
-  const [edited, setEdited] = useState<{ opening: string; bills: Record<string, string> } | null>(null);
   const [tried, setTried] = useState(false);
 
   const total = Number(amount) || 0;
-  const openingLeft = parseFloat(dues.opening_left);
-  const bills = dues.bills.map((b) => ({ id: b.id, due: parseFloat(b.due) }));
-  const auto = splitOldestFirst(total, openingLeft, bills);
-  const split: Split = edited
-    ? {
-        opening: Number(edited.opening) || 0,
-        bills: Object.fromEntries(Object.entries(edited.bills).map(([id, v]) => [id, Number(v) || 0])),
-      }
-    : auto;
-  const advance = advanceOf(total, split);
-  const owed = openingLeft + bills.reduce((s, b) => s + b.due, 0);
-  const problem =
-    total <= 0 ? "Enter the amount paid." : (splitProblem(total, openingLeft, bills, split) ?? (account ? null : "Select the account it was paid from."));
-
-  const shown = (v: number | undefined) => (v ? String(v) : "");
-  const startEdit = () => edited ?? { opening: shown(auto.opening), bills: Object.fromEntries(bills.map((b) => [b.id, shown(auto.bills[b.id])])) };
-  const editOpening = (v: string) => setEdited({ ...startEdit(), opening: v });
-  const editBill = (id: string, v: string) => {
-    const base = startEdit();
-    setEdited({ ...base, bills: { ...base.bills, [id]: v } });
-  };
+  const split = useSplit(total, dues);
+  const { owed, left: advance } = split;
+  const problem = total <= 0 ? "Enter the amount paid." : (split.problem ?? (account ? null : "Select the account it was paid from."));
 
   const refresh = useRefreshSupplierMoney();
   const pay = usePostData<unknown, Record<string, unknown>>(`/suppliers/${supplierId}/payments`, ["suppliers"]);
@@ -88,13 +69,7 @@ function PayForm({ supplierId, supplierName, dues, onDone }: { supplierId: strin
         from_instrument_id: account,
         ...(ref.trim() && { transaction_ref: ref.trim() }),
         ...(note.trim() && { note: note.trim() }),
-        // Exactly what's on screen: if a due changed meanwhile the server refuses rather than re-splitting.
-        split: {
-          ...(split.opening > 0 && { opening: split.opening }),
-          bills: Object.entries(split.bills)
-            .filter(([, v]) => v > 0)
-            .map(([purchase_id, v]) => ({ purchase_id, amount: v })),
-        },
+        split: split.body,
       },
       {
         onSuccess: () => {
@@ -126,8 +101,8 @@ function PayForm({ supplierId, supplierName, dues, onDone }: { supplierId: strin
                 type="button"
                 className="text-xs font-medium text-primary underline-offset-4 hover:underline"
                 onClick={() => {
-                  setEdited(null);
-                  setAmount(String(Math.round(owed * 100) / 100));
+                  split.reset();
+                  setAmount(String(owed));
                 }}
               >
                 Pay all {formatTk(owed)}
@@ -142,43 +117,8 @@ function PayForm({ supplierId, supplierName, dues, onDone }: { supplierId: strin
         </div>
       </div>
 
-      {openingLeft > 0 || bills.length > 0 ? (
-        <div className="flex flex-col gap-1.5">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">What it pays</span>
-            {edited && (
-              <button
-                type="button"
-                className="text-xs font-medium text-primary underline-offset-4 hover:underline"
-                onClick={() => setEdited(null)}
-              >
-                Back to oldest first
-              </button>
-            )}
-          </div>
-          <ul className="divide-y rounded-lg border text-sm">
-            {openingLeft > 0 && (
-              <PartRow
-                id="opening"
-                label="Old balance"
-                due={openingLeft}
-                value={edited ? edited.opening : shown(auto.opening)}
-                onChange={editOpening}
-              />
-            )}
-            {dues.bills.map((b) => (
-              <PartRow
-                key={b.id}
-                id={b.id}
-                label={b.invoice_no ? `Bill ${b.invoice_no}` : "Bill"}
-                detail={formatDate(b.purchase_date)}
-                due={parseFloat(b.due)}
-                value={edited ? (edited.bills[b.id] ?? "") : shown(auto.bills[b.id])}
-                onChange={(v) => editBill(b.id, v)}
-              />
-            ))}
-          </ul>
-        </div>
+      {owed > 0 ? (
+        <SplitFields dues={dues} split={split} />
       ) : (
         <p className="rounded-lg border bg-muted/40 px-3 py-2 text-sm">Nothing is due, so all of this is an advance.</p>
       )}
@@ -218,43 +158,5 @@ function PayForm({ supplierId, supplierName, dues, onDone }: { supplierId: strin
         </Button>
       </DialogFooter>
     </form>
-  );
-}
-
-function PartRow({
-  id,
-  label,
-  detail,
-  due,
-  value,
-  onChange,
-}: {
-  id: string;
-  label: string;
-  detail?: string;
-  due: number;
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <li className="flex items-center justify-between gap-3 px-3 py-2">
-      <label htmlFor={`part-${id}`} className="min-w-0">
-        <span className="block truncate">{label}</span>
-        <span className="block text-xs text-muted-foreground tabular-nums">
-          {detail ? `${detail}, ` : ""}
-          {formatTk(due)} due
-        </span>
-      </label>
-      <NumericInput
-        id={`part-${id}`}
-        className="w-32 text-right"
-        allowDecimal
-        decimalPlaces={2}
-        allowZero
-        placeholder="0"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
-    </li>
   );
 }

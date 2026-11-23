@@ -35,7 +35,7 @@ export function splitProblem(amount: number, openingLeft: number, bills: OpenBil
   for (const b of bills) {
     if (paisa(split.bills[b.id] ?? 0) > paisa(b.due)) return `Only ${formatTk(b.due)} is due on that bill.`;
   }
-  return advanceOf(amount, split) < 0 ? "The parts add up to more than the amount paid." : null;
+  return advanceOf(amount, split) < 0 ? `The parts add up to more than ${formatTk(amount)}.` : null;
 }
 
 /** How much of the advance held settles a new bill, after what's paid on it now. */

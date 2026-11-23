@@ -17,6 +17,7 @@ import { OpeningDialog } from "@/pages/suppliers/opening-dialog";
 import { PaySupplierDialog } from "@/pages/suppliers/pay-supplier-dialog";
 import { StatementCard } from "@/pages/suppliers/statement-card";
 import type { SupplierBalance, SupplierStatement } from "@/pages/suppliers/supplier-money-types";
+import { UseAdvanceDialog } from "@/pages/suppliers/use-advance-dialog";
 import { SupplierRefundDialog } from "@/pages/suppliers/supplier-refund-dialog";
 
 export function SupplierDetailPage() {
@@ -34,6 +35,7 @@ export function SupplierDetailPage() {
   const owed = parseFloat(balance?.owed ?? "0");
   const advance = parseFloat(balance?.advance ?? "0");
   const [payOpen, setPayOpen] = useState(false);
+  const [useOpen, setUseOpen] = useState(false);
   const [refundOpen, setRefundOpen] = useState(false);
   const [openingOpen, setOpeningOpen] = useState(false);
 
@@ -132,6 +134,11 @@ export function SupplierDetailPage() {
           <Banknote />
           Pay supplier
         </Button>
+        {advance > 0 && owed > 0 && (
+          <Button variant="outline" onClick={() => setUseOpen(true)}>
+            Use advance
+          </Button>
+        )}
         {advance > 0 && (
           <Button variant="outline" onClick={() => setRefundOpen(true)}>
             Refund
@@ -145,6 +152,7 @@ export function SupplierDetailPage() {
       <StatementCard supplierId={supplier.id} supplierName={supplier.profile.name} />
 
       <PaySupplierDialog supplierId={supplier.id} supplierName={supplier.profile.name} open={payOpen} onOpenChange={setPayOpen} />
+      <UseAdvanceDialog supplierId={supplier.id} supplierName={supplier.profile.name} open={useOpen} onOpenChange={setUseOpen} />
       <SupplierRefundDialog
         supplierId={supplier.id}
         supplierName={supplier.profile.name}

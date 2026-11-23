@@ -23,7 +23,7 @@ test("what's wrong with an edited split", () => {
   expect(check(150, 50, 100)).toBeNull();
   expect(check(200, 0, 0)).toBeNull();
   expect(check(0.3, 0.1, 0.2)).toBeNull();
-  expect(check(140, 50, 100)).toBe("The parts add up to more than the amount paid.");
+  expect(check(140, 50, 100)).toBe("The parts add up to more than ৳140.");
   expect(check(500, 51, 0)).toBe("Only ৳50 of the old balance is left.");
   expect(check(500, 0, 100.01)).toBe("Only ৳100 is due on that bill.");
   expect(check(500, -1, 0)).toBe("A part can't be below zero.");
