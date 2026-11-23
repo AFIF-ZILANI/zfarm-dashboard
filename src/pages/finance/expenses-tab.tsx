@@ -20,12 +20,15 @@ import { useGetData, type Paginated } from "@/lib/api";
 import { formatDate, formatTk, humanizeEnum } from "@/lib/utils";
 import type { Batch } from "@/pages/batches/types";
 import { ExpenseCreateDialog } from "@/pages/finance/expense-create-dialog";
-import { EXPENSE_COST_TYPES, type Expense, type ExpenseSummary } from "@/pages/finance/types";
+import {
+  EXPENSE_COST_TYPES,
+  LOAN_INTEREST,
+  PAYROLL_CATEGORIES,
+  settledElsewhere,
+  type Expense,
+  type ExpenseSummary,
+} from "@/pages/finance/types";
 
-/** Wage and fee expenses are paid by their payroll payout, never by a payment here. */
-const PAYROLL_CATEGORIES = ["SALARY", "FESTIVAL_BONUS", "SALARY_TRANSFER_FEE"];
-/** Loan interest is paid by its loan's installment (Loans tab). */
-const LOAN_INTEREST = "LOAN_INTEREST";
 const COST_TYPE_LABEL: Record<string, string> = {
   DIRECT: "Batch",
   SHARED_PERIOD: "Farm-wide",
@@ -73,7 +76,7 @@ export function ExpensesTab() {
   );
   const categoryLabel = (code: string) => categories?.results.find((c) => c.code === code)?.label ?? humanizeEnum(code);
   const batchCode = (id: string) => batches?.results.find((b) => b.id === id)?.batch_code ?? "—";
-  const owed = (e: Expense) => (PAYROLL_CATEGORIES.includes(e.category) || e.category === LOAN_INTEREST ? 0 : parseFloat(trueAmounts(e.id, "0", e.amount).due));
+  const owed = (e: Expense) => (settledElsewhere(e.category) ? 0 : parseFloat(trueAmounts(e.id, "0", e.amount).due));
 
   const expenses = data?.results ?? [];
   const columns: Column<Expense>[] = [
@@ -123,7 +126,7 @@ export function ExpensesTab() {
             size="icon-sm"
             disabled={due <= 0}
             aria-label={due <= 0 ? "Nothing to pay" : "Record payment"}
-            title={PAYROLL_CATEGORIES.includes(e.category) ? "Paid through payroll" : due <= 0 ? "Fully paid" : "Record payment"}
+            title={PAYROLL_CATEGORIES.includes(e.category) ? "Paid through payroll" : e.category === LOAN_INTEREST ? "Paid through its loan" : due <= 0 ? "Fully paid" : "Record payment"}
             onClick={(ev) => {
               ev.stopPropagation();
               setPayExpenseId(e.id);

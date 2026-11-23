@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { ArrowDownLeft, ArrowUpRight, Banknote, HandCoins, Landmark, Receipt, Scale, TrendingUp, Wallet } from "lucide-react";
+import { ArrowDownLeft, ArrowLeftRight, ArrowUpRight, Banknote, HandCoins, Landmark, Receipt, Scale, TrendingUp, Wallet } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { KPICard } from "@/components/shared/kpi-card";
 import { useGetData, type Paginated } from "@/lib/api";
 import { cn, daysAgoMs, formatDate, formatTk } from "@/lib/utils";
+import { accountsOf, flowOf, signOf } from "@/pages/payments/movements";
 import { KIND_LABEL, NO_BILL_KINDS, type NoBillKind, type Payment, type PaymentInstrument } from "@/pages/payments/types";
 import type { FinanceMonth, FinanceOwed, FinancePeriod, FinanceSummary, FinancialDashboard, OwedSide } from "@/pages/finance/types";
 import { CashFlowChart, CostBreakdownChart, ProfitTrendChart } from "@/pages/finance/finance-charts";
@@ -382,7 +383,7 @@ const refHref = (p: Payment) =>
 function RecentMovementsCard() {
   const { data, isLoading } = useGetData<Paginated<Payment>>("/payments?limit=10", ["payments", "recent"]);
   const { data: accounts } = useGetData<Paginated<PaymentInstrument>>("/payment-instruments?limit=100", ["payment-instruments", "all"]);
-  const accountName = (p: Payment) => accounts?.results.find((a) => a.id === (p.to_instrument_id ?? p.from_instrument_id))?.label ?? "—";
+  const accountLabel = (id: string | null) => accounts?.results.find((a) => a.id === id)?.label ?? "—";
   const payments = data?.results ?? [];
   return (
     <Card>
@@ -403,13 +404,14 @@ function RecentMovementsCard() {
         ) : (
           <ul className="flex flex-col divide-y text-sm">
             {payments.map((p) => {
-              const incoming = p.direction === "INCOMING";
+              const flow = flowOf(p);
+              const incoming = flow === "IN";
               const href = refHref(p);
               return (
                 <li key={p.id} className="flex items-center justify-between gap-3 py-2">
                   <span className="flex min-w-0 items-center gap-3">
                     <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-full", incoming ? "bg-success/10 text-success" : "bg-muted text-muted-foreground")}>
-                      {incoming ? <ArrowDownLeft className="size-4" aria-hidden /> : <ArrowUpRight className="size-4" aria-hidden />}
+                      {flow === "MOVED" ? <ArrowLeftRight className="size-4" aria-hidden /> : incoming ? <ArrowDownLeft className="size-4" aria-hidden /> : <ArrowUpRight className="size-4" aria-hidden />}
                     </span>
                     <span className="min-w-0">
                       <span className="block truncate">
@@ -424,13 +426,13 @@ function RecentMovementsCard() {
                         )}
                       </span>
                       <span className="block truncate text-xs text-muted-foreground">
-                        {formatDate(p.payment_date)}, {incoming ? "into" : "from"} {accountName(p)}
+                        {formatDate(p.payment_date)}, {accountsOf(p, accountLabel)}
                         {p.transaction_ref ? `, ref ${p.transaction_ref}` : ""}
                       </span>
                     </span>
                   </span>
                   <span className="font-semibold tabular-nums">
-                    {incoming ? "+" : "−"}
+                    {signOf(p)}
                     {formatTk(p.amount)}
                   </span>
                 </li>

@@ -8,10 +8,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { DataTable, type Column } from "@/components/shared/data-table";
 import { KPICard } from "@/components/shared/kpi-card";
 import { StatusBadge } from "@/components/shared/status-badge";
+import { useQueryClient } from "@tanstack/react-query";
 import { useConfirm } from "@/components/shared/confirm-dialog";
 import { useDelete, useGetData } from "@/lib/api";
 import { formatDate, formatTk } from "@/lib/utils";
-import { LOAN_PURPOSE_LABEL, LOAN_TERMS_LABEL, type Expense, type Loan } from "@/pages/finance/types";
+import { LOAN_PURPOSE_LABEL, LOAN_TERMS_LABEL, type Loan } from "@/pages/finance/types";
 import type { Payment } from "@/pages/payments/types";
 import { PayInstallmentDialog, RecordLoanDialog } from "@/pages/finance/loan-forms";
 
@@ -38,10 +39,11 @@ export function LoansTab() {
     .sort()[0];
 
   const select = (id: string | null) =>
-    setParams((p) => {
-      if (id) p.set("loan", id);
-      else p.delete("loan");
-      return p;
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (id) next.set("loan", id);
+      else next.delete("loan");
+      return next;
     });
 
   const columns: Column<Loan>[] = [
@@ -125,12 +127,13 @@ export function LoansTab() {
   );
 }
 
-type LoanDetail = Loan & { payments: Payment[]; interest: Expense[] };
+type LoanDetail = Loan & { payments: (Payment & { interest: string | null })[] };
 
 function LoanDetailDialog({ id, onClose, onPay }: { id: string | null; onClose: () => void; onPay: (l: Loan) => void }) {
-  const { data: loan, isLoading } = useGetData<LoanDetail>(`/loans/${id}`, ["loans", id], { enabled: !!id });
+  const { data: loan, error } = useGetData<LoanDetail>(`/loans/${id}`, ["loans", id], { enabled: !!id });
   const { confirm, confirmDialog } = useConfirm();
   const remove = useDelete<null, string>((loanId) => `/loans/${loanId}`, ["loans"]);
+  const queryClient = useQueryClient();
   const installments = (loan?.payments ?? []).filter((p) => p.direction === "OUTGOING");
   const receipt = (loan?.payments ?? []).find((p) => p.direction === "INCOMING");
 
@@ -145,6 +148,10 @@ function LoanDetailDialog({ id, onClose, onPay }: { id: string | null; onClose: 
     if (!ok) return;
     remove.mutate(l.id, {
       onSuccess: () => {
+        // Its receipt and any interest went with it: balances, cash book, expenses and figures all changed.
+        for (const key of ["payments", "payment-instruments", "expenses", "analytics"]) {
+          void queryClient.invalidateQueries({ queryKey: [key] });
+        }
         toast.success("Loan removed");
         onClose();
       },
@@ -162,8 +169,16 @@ function LoanDetailDialog({ id, onClose, onPay }: { id: string | null; onClose: 
   return (
     <Dialog open={!!id} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-xl">
-        {isLoading || !loan ? (
-          <Skeleton className="h-60 w-full" />
+        {error ? (
+          <DialogHeader>
+            <DialogTitle>Loan not found</DialogTitle>
+            <DialogDescription>{error.message}</DialogDescription>
+          </DialogHeader>
+        ) : !loan ? (
+          <>
+            <DialogTitle className="sr-only">Loan</DialogTitle>
+            <Skeleton className="h-60 w-full" />
+          </>
         ) : (
           <>
             <DialogHeader>
@@ -197,7 +212,7 @@ function LoanDetailDialog({ id, onClose, onPay }: { id: string | null; onClose: 
               ) : (
                 <ul className="max-h-48 divide-y overflow-y-auto rounded-lg border text-sm">
                   {installments.map((p) => {
-                    const interest = loan.interest.find((e) => e.date === p.payment_date)?.amount;
+                    const interest = p.interest;
                     return (
                       <li key={p.id} className="flex items-center justify-between gap-3 px-3 py-2">
                         <span className="tabular-nums">{formatDate(p.payment_date)}</span>

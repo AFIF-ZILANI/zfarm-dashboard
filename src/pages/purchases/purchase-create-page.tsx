@@ -25,6 +25,7 @@ import { useGetData, usePostData, type Paginated } from "@/lib/api";
 import { formatTk, humanizeEnum, toCents } from "@/lib/utils";
 import { ItemCombobox } from "@/pages/purchases/item-combobox";
 import type { Item, Warehouse } from "@/pages/inventory/types";
+import { LOAN_INTEREST } from "@/pages/finance/types";
 import type { LookupRow } from "@/pages/settings/lookup-types";
 import type { Supplier } from "@/pages/suppliers/types";
 import type { PaymentInstrument } from "@/pages/payments/types";
@@ -669,7 +670,7 @@ export function PurchaseCreatePage() {
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      {(expenseCategories?.results ?? []).map((e) => (
+                      {(expenseCategories?.results ?? []).filter((e) => e.code !== LOAN_INTEREST).map((e) => (
                         <SelectItem key={e.code} value={e.code}>
                           {e.label}
                         </SelectItem>

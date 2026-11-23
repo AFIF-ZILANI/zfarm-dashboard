@@ -27,6 +27,7 @@ import {
   type LoanPurpose,
   type LoanTerms,
 } from "@/pages/finance/types";
+import { interestPart, schedule } from "@/pages/finance/loan-math";
 
 const FREQUENCY_LABEL: Record<LoanFrequency, string> = { MONTHLY: "Monthly", WEEKLY: "Weekly", ONE_OFF: "Once, in full" };
 
@@ -37,20 +38,6 @@ const PURPOSE_HINT: Record<LoanPurpose, string> = {
   LOSS: "Covering a disease or price shock. Interest is shared like a farm loan.",
   OLD_DEBT: "Owed before FMS started. No money comes in now; only the repayments are recorded.",
 };
-
-/** Mirrors the server's schedule (LoanService.loanSchedule) so the dialog can preview it. */
-function schedule(principal: number, terms: LoanTerms, rate: number, total: number, count: number, frequency: LoanFrequency) {
-  if (!(principal > 0) || !(count > 0)) return null;
-  if (terms === "EMI") {
-    if (!(rate > 0) || frequency === "ONE_OFF") return null;
-    const r = rate / 100 / (frequency === "MONTHLY" ? 12 : 52);
-    const installment = Math.round(((principal * r) / (1 - Math.pow(1 + r, -count))) * 100) / 100;
-    return { installment, total: installment * count };
-  }
-  const t = terms === "FLAT" ? total : principal;
-  if (!(t >= principal)) return null;
-  return { installment: Math.round((t / count) * 100) / 100, total: t };
-}
 
 const loanSchema = z
   .object({
@@ -76,6 +63,7 @@ const loanSchema = z
     if (v.terms === "EMI" && v.frequency === "ONE_OFF") issue("frequency", "An EMI is paid monthly or weekly");
     if (v.terms === "FLAT" && !(Number(v.total_payable) >= v.principal))
       issue("total_payable", "The total to repay can't be less than the amount borrowed");
+    if (v.first_due_on < v.received_on) issue("first_due_on", "Can't be before the loan's own date");
     if (v.frequency === "ONE_OFF" && v.installment_count !== 1) issue("installment_count", "A one-off repayment is one installment");
   });
 type LoanFormInput = z.input<typeof loanSchema>;
@@ -149,7 +137,8 @@ export function RecordLoanDialog({ open, onOpenChange }: { open: boolean; onOpen
           toast.success(`Loan from ${v.lender} recorded`);
           onOpenChange(false);
         },
-        onError: (error) => toast.error(error.message),
+        onError: (error) =>
+          toast.error(error.fieldError("principal") ?? error.fieldError("installment_count") ?? error.fieldError("first_due_on") ?? error.message),
       },
     );
 
@@ -370,6 +359,7 @@ export function PayInstallmentDialog({ loan, onOpenChange }: { loan: Loan | null
   // Hoisted: the React Compiler crashes on `loan?.x` read inside a closure while loan is null.
   const loanId = loan?.id;
   const lender = loan?.lender;
+  const receivedOn = loan?.received_on.slice(0, 10);
   useEffect(() => {
     if (loan)
       reset({
@@ -384,8 +374,7 @@ export function PayInstallmentDialog({ loan, onOpenChange }: { loan: Loan | null
   const amount = Number(useWatch({ control, name: "amount" })) || 0;
   // A batch loan's interest is already on its batch; an interest-free one has none.
   const asksInterest = !!loan && loan.purpose !== "BATCH" && parseFloat(loan.interest_total) > 0;
-  const share = loan ? (parseFloat(loan.total_payable) - parseFloat(loan.principal)) / parseFloat(loan.total_payable) : 0;
-  const suggested = Math.round(amount * share * 100) / 100;
+  const { suggested, least, most } = loan ? interestPart(loan, amount) : { suggested: 0, least: 0, most: 0 };
 
   const queryClient = useQueryClient();
   const pay = usePostData<unknown, Record<string, unknown>>(() => `/loans/${loanId}/installments`, ["loans"]);
@@ -395,8 +384,12 @@ export function PayInstallmentDialog({ loan, onOpenChange }: { loan: Loan | null
       return;
     }
     const interest = v.interest === "" ? undefined : Number(v.interest);
-    if (interest !== undefined && interest > v.amount) {
-      setError("interest", { message: "Interest can't be more than the installment" });
+    if (asksInterest && interest !== undefined && (interest < least - 0.005 || interest > most + 0.005)) {
+      setError("interest", { message: `Between ${formatTk(least)} and ${formatTk(most)} for this payment` });
+      return;
+    }
+    if (receivedOn && v.payment_date < receivedOn) {
+      setError("payment_date", { message: "Before the loan's own date" });
       return;
     }
     pay.mutate(
@@ -415,7 +408,7 @@ export function PayInstallmentDialog({ loan, onOpenChange }: { loan: Loan | null
           toast.success(`${formatTk(v.amount)} paid to ${lender}`);
           onOpenChange(false);
         },
-        onError: (error) => toast.error(error.fieldError("amount") ?? error.message),
+        onError: (error) => toast.error(error.fieldError("amount") ?? error.fieldError("interest") ?? error.fieldError("payment_date") ?? error.message),
       },
     );
   };
@@ -438,7 +431,8 @@ export function PayInstallmentDialog({ loan, onOpenChange }: { loan: Loan | null
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="inst_date">Date</Label>
-              <Input id="inst_date" type="date" max={farmToday()} {...register("payment_date")} />
+              <Input id="inst_date" type="date" min={receivedOn} max={farmToday()} {...register("payment_date")} aria-invalid={!!errors.payment_date} />
+              {errors.payment_date && <p className="text-xs text-destructive">{errors.payment_date.message}</p>}
             </div>
           </div>
           {asksInterest && (
@@ -462,7 +456,7 @@ export function PayInstallmentDialog({ loan, onOpenChange }: { loan: Loan | null
                 aria-invalid={!!errors.interest}
               />
               <p className="text-xs text-muted-foreground">
-                Left blank, {formatTk(suggested)} is used: the loan's interest share of this payment. Type the figure on the
+                Left blank, {formatTk(suggested)} is used: this payment's share of the interest still left. Type the figure on the
                 bank statement if it differs. Only this part is a cost.
               </p>
               {errors.interest && <p className="text-xs text-destructive">{errors.interest.message}</p>}

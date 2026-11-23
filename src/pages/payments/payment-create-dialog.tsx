@@ -35,7 +35,7 @@ import { useGetData, usePostData, type Paginated } from "@/lib/api";
 import { cn, formatDate, formatTk, humanizeEnum } from "@/lib/utils";
 import type { Batch } from "@/pages/batches/types";
 import type { Customer } from "@/pages/customers/types";
-import type { Expense } from "@/pages/finance/types";
+import { settledElsewhere, type Expense } from "@/pages/finance/types";
 import type { Purchase } from "@/pages/purchases/types";
 import type { Sale, BirdSale } from "@/pages/sales/types";
 import { paymentStatus } from "@/pages/sales/types";
@@ -189,7 +189,8 @@ function useRefOptions(refType: PaymentRefType | undefined, keepRefId?: string):
     );
   } else if (refType === "EXPENSE") {
     // An expense has no paid/due snapshot of its own: all of it is owed until paid.
-    options = (expenses?.results ?? []).map((e) =>
+    // Salaries and loan interest are settled by their payout or loan: the server refuses them here.
+    options = (expenses?.results ?? []).filter((e) => !settledElsewhere(e.category)).map((e) =>
       option(
         e.id,
         `${humanizeEnum(e.category)} · ${formatDate(e.date)}`,

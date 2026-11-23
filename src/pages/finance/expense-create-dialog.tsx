@@ -21,7 +21,7 @@ import { useGetData, usePostData, type Paginated } from "@/lib/api";
 import { formatTk, humanizeEnum } from "@/lib/utils";
 import { FarmAccountSelect } from "@/components/shared/farm-account-select";
 import type { Batch } from "@/pages/batches/types";
-import { COST_TYPES, type Expense } from "@/pages/finance/types";
+import { LOAN_INTEREST, COST_TYPES, type Expense } from "@/pages/finance/types";
 import type { LookupRow } from "@/pages/settings/lookup-types";
 import { farmToday } from "@/lib/farm-day";
 
@@ -164,7 +164,7 @@ export function ExpenseCreateDialog({ open, onOpenChange }: ExpenseCreateDialogP
                     </SelectTrigger>
                     <SelectContent>
                       {/* Loan interest is booked by the Loans tab, never entered by hand. */}
-                      {(categories?.results ?? []).filter((c) => c.code !== "LOAN_INTEREST").map((c) => (
+                      {(categories?.results ?? []).filter((c) => c.code !== LOAN_INTEREST).map((c) => (
                         <SelectItem key={c.code} value={c.code}>
                           {c.label}
                         </SelectItem>

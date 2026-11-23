@@ -205,3 +205,11 @@ export type Loan = {
   interest_booked: string;
   next_due_on: string | null;
 };
+
+/** Wage and fee expenses, paid by their payroll payout. */
+export const PAYROLL_CATEGORIES = ["SALARY", "FESTIVAL_BONUS", "SALARY_TRANSFER_FEE"];
+/** Booked and paid by its loan (Loans tab), never entered by hand. */
+export const LOAN_INTEREST = "LOAN_INTEREST";
+/** Expenses some other payment settles: never owed, never offered for payment. */
+export const settledElsewhere = (category: string) =>
+  PAYROLL_CATEGORIES.includes(category) || category === LOAN_INTEREST;

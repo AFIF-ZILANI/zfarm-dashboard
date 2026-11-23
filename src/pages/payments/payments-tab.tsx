@@ -12,6 +12,7 @@ import type { Sale, BirdSale } from "@/pages/sales/types";
 import type { PaymentInstrument } from "@/pages/payments/types";
 import { PaymentCreateDialog } from "@/pages/payments/payment-create-dialog";
 import { KIND_LABEL, type Payment } from "@/pages/payments/types";
+import { totals } from "@/pages/payments/movements";
 
 export function PaymentsTab() {
   const [createOpen, setCreateOpen] = useState(false);
@@ -49,9 +50,7 @@ export function PaymentsTab() {
 
   const payments = data?.results ?? [];
   // A transfer only moves money between the farm's own accounts: neither in nor out.
-  const flows = payments.filter((p) => p.ref_type !== "TRANSFER");
-  const totalIncoming = flows.filter((p) => p.direction === "INCOMING").reduce((sum, p) => sum + parseFloat(p.amount), 0);
-  const totalOutgoing = flows.filter((p) => p.direction === "OUTGOING").reduce((sum, p) => sum + parseFloat(p.amount), 0);
+  const { incoming: totalIncoming, outgoing: totalOutgoing } = totals(payments);
 
   const columns: Column<Payment>[] = [
     { key: "date", header: "Date", render: (p) => new Date(p.payment_date).toLocaleDateString() },
