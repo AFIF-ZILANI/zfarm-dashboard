@@ -27,9 +27,9 @@ export function SupplierDetailPage() {
   const { data: supplier, isLoading } = useGetData<Supplier>(`/suppliers/${id}`, ["suppliers", id]);
   usePageTitle(supplier?.profile.name ?? "Supplier");
 
-  const { data: balances } = useGetData<SupplierBalance[]>("/suppliers/balances", ["suppliers", "balances"]);
+  const { data: balances, isError: balancesError } = useGetData<SupplierBalance[]>("/suppliers/balances", ["suppliers", "balances"]);
   // All dates: the card below has its own range.
-  const { data: statement } = useGetData<SupplierStatement>(`/suppliers/${id}/statement?`, ["suppliers", id, "statement", "", ""]);
+  const { data: statement, isError: statementError } = useGetData<SupplierStatement>(`/suppliers/${id}/statement?`, ["suppliers", id, "statement", "", ""]);
   const balance = balances?.find((b) => b.supplier_id === id);
   const owed = parseFloat(balance?.owed ?? "0");
   const advance = parseFloat(balance?.advance ?? "0");
@@ -121,10 +121,10 @@ export function SupplierDetailPage() {
       </Card>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <KPICard label="You owe" money={owed} icon={Banknote} isLoading={!balances} />
-        <KPICard label="Advance they hold" money={advance} icon={HandCoins} isLoading={!balances} />
-        <KPICard label="Bought" money={statement?.bought ?? 0} icon={Package} isLoading={!statement} />
-        <KPICard label="Paid" money={statement?.paid ?? 0} icon={Wallet} isLoading={!statement} />
+        <KPICard label="You owe" money={owed} icon={Banknote} isLoading={!balances && !balancesError} isError={balancesError} />
+        <KPICard label="Advance they hold" money={advance} icon={HandCoins} isLoading={!balances && !balancesError} isError={balancesError} />
+        <KPICard label="Bought" money={statement?.bought ?? 0} icon={Package} isLoading={!statement && !statementError} isError={statementError} />
+        <KPICard label="Paid" money={statement?.paid ?? 0} icon={Wallet} isLoading={!statement && !statementError} isError={statementError} />
       </div>
 
       <div className="flex flex-wrap gap-2">

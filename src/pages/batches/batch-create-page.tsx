@@ -16,7 +16,7 @@ import { useGetData, usePostData, type ApiError, type Paginated } from "@/lib/ap
 import { humanizeEnum } from "@/lib/utils";
 import { BIRD_BREEDS, type Batch } from "@/pages/batches/types";
 import type { House } from "@/pages/houses/types";
-import { blankChickPurchase, chickProblem, chickTotals, useChickPurchase, type ChickPurchase } from "@/pages/batches/chick-purchase";
+import { blankChickPurchase, chickProblem, useChickPurchase, type ChickPurchase } from "@/pages/batches/chick-purchase";
 import { ChickPaymentFields, ChickPurchaseFields, PaymentStatusSelect } from "@/pages/batches/chick-purchase-fields";
 
 const batchSchema = z.object({
@@ -99,13 +99,12 @@ export function BatchCreatePage() {
   );
 
   const createBatch = usePostData<Batch, BatchFormValues>("/batches", ["batches"]);
-  const chickPurchase = useChickPurchase();
+  const chickPurchase = useChickPurchase(chicks.supplier_id);
 
   const placed = Number(useWatch({ control, name: "initial_chick_count" })) || 0;
-  const { total } = chickTotals(chicks, placed);
 
   const onSubmit = async (values: BatchFormValues) => {
-    const problem = chicksEnabled ? chickProblem(chicks, placed, chickPurchase.hasWarehouse) : null;
+    const problem = chicksEnabled ? chickProblem(chicks, placed, chickPurchase.hasWarehouse, chickPurchase.held) : null;
     setChickError(problem);
     if (problem) return;
 
@@ -299,7 +298,7 @@ export function BatchCreatePage() {
               <PaymentStatusSelect value={chicks.status} onChange={(status) => setChick({ status })} />
             </CardHeader>
             <CardContent>
-              <ChickPaymentFields chicks={chicks} setChick={setChick} total={total} />
+              <ChickPaymentFields chicks={chicks} setChick={setChick} defaultBilled={placed} held={chickPurchase.held} />
             </CardContent>
           </Card>
         )}

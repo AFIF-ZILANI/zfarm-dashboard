@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { ApiError } from "@/lib/api";
 import { farmToday } from "@/lib/farm-day";
-import { blankChickPurchase, chickProblem, chickTotals, useChickPurchase, type ChickPurchase } from "@/pages/batches/chick-purchase";
+import { blankChickPurchase, chickProblem, useChickPurchase, type ChickPurchase } from "@/pages/batches/chick-purchase";
 import { ChickPaymentFields, ChickPurchaseFields, PaymentStatusSelect } from "@/pages/batches/chick-purchase-fields";
 import type { Batch } from "@/pages/batches/types";
 
@@ -26,11 +26,10 @@ export function ChickDeliveryDialog({ batch, onClose }: { batch: Batch; onClose:
   const [problem, setProblem] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const setChick = (patch: Partial<ChickPurchase>) => setChicks((c) => ({ ...c, ...patch }));
-  const chickPurchase = useChickPurchase();
-  const { total } = chickTotals(chicks, 0);
+  const chickPurchase = useChickPurchase(chicks.supplier_id);
 
   const save = async () => {
-    const issue = chickProblem(chicks, 0, chickPurchase.hasWarehouse) ?? (date ? null : "Pick the delivery date.");
+    const issue = chickProblem(chicks, 0, chickPurchase.hasWarehouse, chickPurchase.held) ?? (date ? null : "Pick the delivery date.");
     setProblem(issue);
     if (issue) return;
     setSaving(true);
@@ -74,7 +73,7 @@ export function ChickDeliveryDialog({ batch, onClose }: { batch: Batch; onClose:
             <span className="text-sm font-medium">Payment</span>
             <PaymentStatusSelect value={chicks.status} onChange={(status) => setChick({ status })} />
           </div>
-          <ChickPaymentFields chicks={chicks} setChick={setChick} total={total} />
+          <ChickPaymentFields chicks={chicks} setChick={setChick} defaultBilled={0} held={chickPurchase.held} />
         </div>
 
         {problem && <p className="text-sm text-destructive">{problem}</p>}

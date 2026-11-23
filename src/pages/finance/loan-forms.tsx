@@ -63,7 +63,7 @@ const loanSchema = z
     if (v.terms === "EMI" && v.frequency === "ONE_OFF") issue("frequency", "An EMI is paid monthly or weekly");
     if (v.terms === "FLAT" && !(Number(v.total_payable) >= v.principal))
       issue("total_payable", "The total to repay can't be less than the amount borrowed");
-    if (v.first_due_on < v.received_on) issue("first_due_on", "Can't be before the loan's own date");
+    if (v.purpose !== "OLD_DEBT" && v.first_due_on < v.received_on) issue("first_due_on", "Can't be before the loan's own date");
     if (v.frequency === "ONE_OFF" && v.installment_count !== 1) issue("installment_count", "A one-off repayment is one installment");
   });
 type LoanFormInput = z.input<typeof loanSchema>;

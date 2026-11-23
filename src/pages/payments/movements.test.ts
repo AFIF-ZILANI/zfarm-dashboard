@@ -1,7 +1,7 @@
 // Run with `bun test src/pages/payments`
 import { expect, test } from "bun:test";
 import { settledElsewhere } from "../finance/types";
-import { accountsOf, flowOf, groupSupplierPayments, signOf, totals } from "./movements";
+import { accountsOf, flowOf, groupSupplierPayments, kindOf, signOf, totals } from "./movements";
 import { KIND_LABEL, NO_BILL_KINDS, PAYMENT_REF_TYPES, type Payment } from "./types";
 
 const row = (over = {}) => ({
@@ -42,4 +42,11 @@ test("one supplier payment is one line, where its first part was", () => {
     ["4", "7", ["4"]],
   ]);
   expect(totals(out)).toEqual(totals(rows));
+});
+test("a supplier's money is named for what happened, not for its parts", () => {
+  const p = (over = {}, parts = 1) => ({ ...row(over), parts: Array(parts).fill(row(over)) }) as unknown as Parameters<typeof kindOf>[0];
+  expect(kindOf(p({ ref_type: "PURCHASE", supplier_payment_id: "g" }, 3))).toBe("Supplier payment");
+  expect(kindOf(p({ ref_type: "SUPPLIER_ADVANCE", supplier_payment_id: "g" }))).toBe("Supplier advance");
+  expect(kindOf(p({ ref_type: "SUPPLIER_ADVANCE", supplier_payment_id: "g", direction: "INCOMING" }))).toBe("Supplier refund");
+  expect(kindOf(p({ ref_type: "PURCHASE", supplier_payment_id: null }))).toBe("Purchase");
 });

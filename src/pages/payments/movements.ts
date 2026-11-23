@@ -1,4 +1,4 @@
-import type { Payment } from "@/pages/payments/types";
+import { KIND_LABEL, type Payment } from "./types";
 
 type Move = Pick<Payment, "direction" | "ref_type" | "amount" | "from_instrument_id" | "to_instrument_id">;
 
@@ -19,6 +19,12 @@ export function accountsOf(p: Move, label: (id: string | null) => string) {
 export function totals(payments: Move[]) {
   const sum = (f: "IN" | "OUT") => payments.filter((p) => flowOf(p) === f).reduce((s, p) => s + parseFloat(p.amount), 0);
   return { incoming: sum("IN"), outgoing: sum("OUT") };
+}
+
+/** What a cash book line is called. */
+export function kindOf(p: Payment & { parts: Payment[] }): string {
+  if (p.ref_type === "SUPPLIER_ADVANCE" && p.direction === "INCOMING") return "Supplier refund";
+  return p.parts.length > 1 ? "Supplier payment" : KIND_LABEL[p.ref_type];
 }
 
 /** Rows with the parts of one supplier payment joined into one line: what was handed over, as the bank shows it. */
