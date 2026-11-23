@@ -25,6 +25,9 @@ test("odd paisa always make the whole", () => {
       expect(Math.min(r.reinvest, r.reserve, r.owner, r.tax, r.reserve - r.tax)).toBeGreaterThanOrEqual(0);
     }
 });
+test("half a paisa rounds up, and reinvestment takes what's left", () => {
+  expect(run(0.05)).toMatchObject({ reserve: 0.02, owner: 0.01, reinvest: 0.02, tax: 0.01 });
+});
 test("a loss: the reserve pays what it can", () => {
   expect(settleLoss(100000, 40000)).toEqual({ covered: 40000, carried: 60000 });
   expect(settleLoss(100000, 200000)).toEqual({ covered: 100000, carried: 0 });
