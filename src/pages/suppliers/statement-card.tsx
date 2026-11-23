@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DataTable, type Column } from "@/components/shared/data-table";
 import { useGetData } from "@/lib/api";
+import { printSheet } from "@/lib/print";
 import { cn, formatDate, formatTk } from "@/lib/utils";
 import type { StatementLine, SupplierStatement } from "@/pages/suppliers/supplier-money-types";
 import { PaymentDetailDialog } from "@/pages/suppliers/remove-payment-dialog";
@@ -86,20 +87,7 @@ export function StatementCard({ supplierId, supplierName }: { supplierId: string
     },
   ];
 
-  // Same hoist as the QR sheet: only what's a direct child of <body> is printed (index.css).
-  const print = () => {
-    const node = sheet.current;
-    if (!node) return;
-    const parent = node.parentElement!;
-    const anchor = node.nextSibling;
-    document.body.appendChild(node);
-    const restore = () => {
-      parent.insertBefore(node, anchor);
-      window.removeEventListener("afterprint", restore);
-    };
-    window.addEventListener("afterprint", restore);
-    window.print();
-  };
+  const print = () => sheet.current && printSheet(sheet.current);
 
   return (
     <Card>
