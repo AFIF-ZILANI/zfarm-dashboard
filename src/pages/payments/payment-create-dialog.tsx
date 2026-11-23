@@ -101,7 +101,7 @@ const paymentSchema = z
 type PaymentFormInput = z.input<typeof paymentSchema>;
 type PaymentFormValues = z.output<typeof paymentSchema>;
 
-function blankPayment(defaults?: { ref_type?: PaymentRefType; ref_id?: string }): PaymentFormInput {
+function blankPayment(defaults?: { ref_type?: PaymentKind; ref_id?: string }): PaymentFormInput {
   const ref_type = (defaults?.ref_type ?? undefined) as unknown as PaymentFormInput["ref_type"];
   return {
     ref_type,
@@ -209,9 +209,11 @@ type PaymentCreateDialogProps = {
   /** Opened from a record's own row or page: the payment is for that record and it can't be changed. */
   defaultRefType?: PaymentRefType;
   defaultRefId?: string;
+  /** Opened for one kind of money with no bill (an owner draw): preselected, can still be changed. */
+  defaultKind?: PaymentKind;
 };
 
-export function PaymentCreateDialog({ open, onOpenChange, defaultRefType, defaultRefId }: PaymentCreateDialogProps) {
+export function PaymentCreateDialog({ open, onOpenChange, defaultRefType, defaultRefId, defaultKind }: PaymentCreateDialogProps) {
   const locked = !!defaultRefType && !!defaultRefId;
   const {
     control,
@@ -223,12 +225,12 @@ export function PaymentCreateDialog({ open, onOpenChange, defaultRefType, defaul
     formState: { errors, isSubmitting },
   } = useForm<PaymentFormInput, unknown, PaymentFormValues>({
     resolver: zodResolver(paymentSchema),
-    defaultValues: blankPayment({ ref_type: defaultRefType, ref_id: defaultRefId }),
+    defaultValues: blankPayment({ ref_type: defaultRefType ?? defaultKind, ref_id: defaultRefId }),
   });
 
   useEffect(() => {
-    if (open) reset(blankPayment({ ref_type: defaultRefType, ref_id: defaultRefId }));
-  }, [open, reset, defaultRefType, defaultRefId]);
+    if (open) reset(blankPayment({ ref_type: defaultRefType ?? defaultKind, ref_id: defaultRefId }));
+  }, [open, reset, defaultRefType, defaultRefId, defaultKind]);
 
   const kind = useWatch({ control, name: "ref_type" }) as PaymentKind | undefined;
   // Only a bill has a record to pick, a balance and a payment history.
@@ -281,7 +283,7 @@ export function PaymentCreateDialog({ open, onOpenChange, defaultRefType, defaul
       onSuccess: () => {
         // A payment changes what the record still owes, the summaries and KPI tiles that read it, and the
         // account balance it moved.
-        for (const key of ["sales", "bird-sales", "purchases", "expenses", "analytics", "payment-instruments"]) {
+        for (const key of ["sales", "bird-sales", "purchases", "expenses", "analytics", "payment-instruments", "profit-splits"]) {
           void queryClient.invalidateQueries({ queryKey: [key] });
         }
         const left = selected ? selected.due - values.amount : 0;

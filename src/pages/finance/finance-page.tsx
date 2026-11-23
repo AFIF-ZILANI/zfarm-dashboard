@@ -5,6 +5,7 @@ import { DepreciationTab } from "@/pages/finance/depreciation-tab";
 import { BatchPnlTab } from "@/pages/finance/batch-pnl-tab";
 import { SharedCostsTab } from "@/pages/finance/shared-costs-tab";
 import { LoansTab } from "@/pages/finance/loans-tab";
+import { ProfitSplitTab } from "@/pages/finance/profit-split-tab";
 import { PaymentsTab } from "@/pages/payments/payments-tab";
 import { InstrumentsTab } from "@/pages/payments/instruments-tab";
 
@@ -19,6 +20,7 @@ export function FinancePage() {
         { id: "cash-book", label: "Cash book", content: <PaymentsTab /> },
         { id: "accounts", label: "Farm accounts", content: <InstrumentsTab /> },
         { id: "loans", label: "Loans", content: <LoansTab /> },
+        { id: "split", label: "Profit split", content: <ProfitSplitTab /> },
         { id: "expenses", label: "Expenses", content: <ExpensesTab /> },
         { id: "depreciation", label: "Depreciation", content: <DepreciationTab /> },
         { id: "shared-costs", label: "Shared costs", content: <SharedCostsTab /> },

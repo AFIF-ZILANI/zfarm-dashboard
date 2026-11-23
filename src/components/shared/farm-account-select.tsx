@@ -1,13 +1,15 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useGetData, type Paginated } from "@/lib/api";
 import { humanizeEnum } from "@/lib/utils";
-import type { PaymentInstrument } from "@/pages/payments/types";
+import type { Fund, PaymentInstrument } from "@/pages/payments/types";
 
 type FarmAccountSelectProps = {
   id?: string;
   value: string;
   onChange: (value: string) => void;
   invalid?: boolean;
+  /** Only accounts of this fund. */
+  fund?: Fund;
 };
 
 /**
@@ -15,12 +17,12 @@ type FarmAccountSelectProps = {
  * Money recorded as paid when a sale or purchase is created must name one, so the cash lands in a
  * balance and in the cash position.
  */
-export function FarmAccountSelect({ id, value, onChange, invalid }: FarmAccountSelectProps) {
+export function FarmAccountSelect({ id, value, onChange, invalid, fund }: FarmAccountSelectProps) {
   const { data } = useGetData<Paginated<PaymentInstrument>>(
     "/payment-instruments?limit=100&is_active=true",
     ["payment-instruments"],
   );
-  const accounts = data?.results ?? [];
+  const accounts = (data?.results ?? []).filter((a) => !fund || a.fund === fund);
   const label = (i: PaymentInstrument) => `${i.label} (${humanizeEnum(i.type)})`;
 
   return (
