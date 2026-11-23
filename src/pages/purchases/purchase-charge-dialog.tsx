@@ -17,6 +17,7 @@ import { NumericInput } from "@/components/utils/NumaricInput";
 import { FarmAccountSelect } from "@/components/shared/farm-account-select";
 import { useGetData, usePostData, type Paginated } from "@/lib/api";
 import { humanizeEnum } from "@/lib/utils";
+import { LOAN_INTEREST } from "@/pages/finance/types";
 import type { LookupRow } from "@/pages/settings/lookup-types";
 import { farmToday } from "@/lib/farm-day";
 
@@ -106,7 +107,7 @@ export function PurchaseChargeDialog({ purchaseId, open, onOpenChange }: Purchas
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  {(categories?.results ?? []).map((c) => (
+                  {(categories?.results ?? []).filter((c) => c.code !== LOAN_INTEREST).map((c) => (
                     <SelectItem key={c.code} value={c.code}>
                       {c.label}
                     </SelectItem>

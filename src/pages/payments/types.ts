@@ -6,6 +6,30 @@ export type PaymentDirection = (typeof PAYMENT_DIRECTIONS)[number];
 export const PAYMENT_REF_TYPES = ["SALE", "BIRD_SALE", "PURCHASE", "EXPENSE"] as const;
 export type PaymentRefType = (typeof PAYMENT_REF_TYPES)[number];
 
+/** Cash-book money with no bill behind it. A TRANSFER moves between two of the farm's own accounts. */
+export const NO_BILL_KINDS = ["OWNER_CAPITAL", "OWNER_DRAW", "OTHER_IN", "OTHER_OUT", "TRANSFER"] as const;
+export type NoBillKind = (typeof NO_BILL_KINDS)[number];
+/** What a payment can be recorded as from the Record payment dialog. */
+export type PaymentKind = PaymentRefType | NoBillKind;
+/** Every kind a stored row can carry: PAYROLL comes from payouts, LOAN from the Loans tab, SUPPLIER_* from Pay supplier. */
+export type StoredPaymentKind = PaymentKind | "PAYROLL" | "LOAN" | "SUPPLIER_OPENING" | "SUPPLIER_ADVANCE";
+
+export const KIND_LABEL: Record<StoredPaymentKind, string> = {
+  SALE: "Sale",
+  BIRD_SALE: "Bird sale",
+  PURCHASE: "Purchase",
+  EXPENSE: "Expense",
+  PAYROLL: "Payroll",
+  LOAN: "Loan",
+  OWNER_CAPITAL: "Owner capital",
+  OWNER_DRAW: "Owner draw",
+  OTHER_IN: "Other money in",
+  OTHER_OUT: "Other money out",
+  TRANSFER: "Transfer between accounts",
+  SUPPLIER_OPENING: "Supplier old balance",
+  SUPPLIER_ADVANCE: "Supplier advance",
+};
+
 export const PAYMENT_METHODS = ["CASH", "BANK_TRANSFER", "MFS"] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
 
@@ -17,14 +41,17 @@ export type Payment = {
   amount: string;
   payment_date: string;
   direction: PaymentDirection;
-  ref_type: PaymentRefType;
+  ref_type: StoredPaymentKind;
+  /** The bill paid; a row with no bill points at itself. */
   ref_id: string;
-  /** Exactly one is set: the farm account the money left (money out) or landed in (money in). */
+  /** One is set: the farm account the money left (money out) or landed in (money in). A TRANSFER sets both. */
   from_instrument_id: string | null;
   to_instrument_id: string | null;
   transaction_ref: string | null;
   handled_by_id: string | null;
   note: string | null;
+  /** The one amount handed to a supplier that this row is part of. */
+  supplier_payment_id: string | null;
   created_at: string;
 };
 

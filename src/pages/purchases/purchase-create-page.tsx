@@ -3,7 +3,7 @@ import { Controller, useFieldArray, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { useNavigate, useSearchParams } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { ArrowLeft, MoreHorizontal, Plus, Trash2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,9 +25,14 @@ import { useGetData, usePostData, type Paginated } from "@/lib/api";
 import { formatTk, humanizeEnum, toCents } from "@/lib/utils";
 import { ItemCombobox } from "@/pages/purchases/item-combobox";
 import type { Item, Warehouse } from "@/pages/inventory/types";
+import { LOAN_INTEREST } from "@/pages/finance/types";
 import type { LookupRow } from "@/pages/settings/lookup-types";
 import { useUnitLabel } from "@/pages/inventory/use-unit-label";
+import { AdvanceField } from "@/pages/suppliers/advance-field";
+import { advanceToUse } from "@/pages/suppliers/supplier-split";
 import type { Supplier } from "@/pages/suppliers/types";
+import { useAdvanceHeld } from "@/pages/suppliers/use-advance-held";
+import { useRefreshSupplierMoney } from "@/pages/suppliers/use-refresh-supplier-money";
 import type { PaymentInstrument } from "@/pages/payments/types";
 import { DISCOUNT_TYPES, type DiscountType, type Purchase } from "@/pages/purchases/types";
 import { BindCodesPrompt } from "@/pages/purchases/bind-codes-prompt";
@@ -49,7 +54,7 @@ const lineSchema = z.object({
 });
 
 const purchaseSchema = z.object({
-  supplier_id: z.string().optional(),
+  supplier_id: z.string().min(1, "Select the supplier"),
   warehouse_id: z.string().min(1, "Select a warehouse"),
   invoice_no: z.string().trim().optional(),
   purchase_date: z.string().min(1, "Purchase date is required"),
@@ -180,6 +185,8 @@ export function PurchaseCreatePage() {
   );
 
   const createPurchase = usePostData<Purchase, Record<string, unknown>>("/purchases", ["purchases"]);
+  const refreshSupplierMoney = useRefreshSupplierMoney();
+  const [wantAdvance, setWantAdvance] = useState(true);
 
   // Chicks are bought from their batch ("Add chick delivery"), so they're not offered here.
   // Farm-made items (litter) are never bought.
@@ -214,13 +221,22 @@ export function PurchaseCreatePage() {
     )
   );
   const netTotalPreview = toCents(Math.max(0, subtotalPreview - globalDiscountAmount));
+  // The advance the supplier holds, and how much of it this bill takes after what's paid now.
+  const supplierId = useWatch({ control, name: "supplier_id" });
+  const held = useAdvanceHeld(supplierId);
+  const advanceUsed = advanceToUse(
+    netTotalPreview,
+    payment.status === "PARTIAL" ? Number(payment.amount) : 0,
+    held,
+    wantAdvance
+  );
   const hasAnyDiscount =
     globalDiscountType !== undefined || (watchedItems ?? []).some((line) => line?.discount_type !== undefined);
 
   const admin = admins?.results ?? [];
   /** The amount that will actually be posted as a Payment. "Paid in full" always tracks the live
    * net total rather than a stored number, so it can't go stale if a line or discount changes after picking it. */
-  const paymentAmount = payment.status === "PAID" ? netTotalPreview : Number(payment.amount);
+  const paymentAmount = payment.status === "PAID" ? toCents(netTotalPreview - advanceUsed) : Number(payment.amount);
   const chargesTotal = charges.reduce((sum, c) => sum + (Number(c.amount) || 0), 0);
 
   const onSubmit = (values: PurchaseFormValues) => {
@@ -235,6 +251,10 @@ export function PurchaseCreatePage() {
       return;
     }
     setPaymentError(null);
+    if (payment.status === "PAID" && netTotalPreview > 0 && advanceUsed >= netTotalPreview) {
+      setPaymentError("The advance covers this bill, so nothing is paid now. Choose \"Unpaid\".");
+      return;
+    }
     if (payment.status !== "UNPAID") {
       if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) {
         setPaymentError("Enter a valid payment amount.");
@@ -264,9 +284,9 @@ export function PurchaseCreatePage() {
     const paying = payment.status !== "UNPAID";
     const payload = {
       ...values,
-      supplier_id: values.supplier_id || undefined,
       invoice_no: values.invoice_no || undefined,
       paid_amount: paying ? paymentAmount : 0,
+      ...(advanceUsed > 0 && { use_advance: advanceUsed }),
       ...(paying && {
         paid_from_instrument_id: payment.from_instrument_id,
         payment_date: payment.payment_date || undefined,
@@ -290,6 +310,7 @@ export function PurchaseCreatePage() {
 
     return createPurchase.mutate(payload, {
       onSuccess: (purchase) => {
+        refreshSupplierMoney();
         toast.success(paying ? `Purchase recorded and ${formatTk(paymentAmount)} paid` : "Purchase recorded");
         const hasCodedItems = purchase.items.some((line) => CODED_CATEGORIES.includes(line.item.category));
         if (hasCodedItems) setBindPromptPurchase(purchase);
@@ -322,15 +343,15 @@ export function PurchaseCreatePage() {
           </CardHeader>
           <CardContent className="grid grid-cols-4 gap-4">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="supplier_id">Supplier (optional)</Label>
+              <Label htmlFor="supplier_id">Supplier</Label>
               <Controller
                 control={control}
                 name="supplier_id"
                 render={({ field }) => (
                   <Select value={field.value ?? ""} onValueChange={field.onChange}>
-                    <SelectTrigger id="supplier_id" className="w-full">
+                    <SelectTrigger id="supplier_id" className="w-full" aria-invalid={!!errors.supplier_id}>
                       <SelectValue>
-                        {(v: string) => suppliers?.results.find((s) => s.id === v)?.profile.name ?? "None"}
+                        {(v: string) => suppliers?.results.find((s) => s.id === v)?.profile.name ?? "Select supplier"}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
@@ -344,6 +365,13 @@ export function PurchaseCreatePage() {
                   </Select>
                 )}
               />
+              {errors.supplier_id ? (
+                <p className="text-xs text-destructive">{errors.supplier_id.message}</p>
+              ) : (
+                <Link to="/suppliers" className="text-xs font-medium text-primary underline-offset-4 hover:underline">
+                  Add a supplier
+                </Link>
+              )}
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="warehouse_id">Warehouse</Label>
@@ -577,6 +605,11 @@ export function PurchaseCreatePage() {
               </SelectContent>
             </Select>
           </CardHeader>
+          {held > 0 && (
+            <CardContent>
+              <AdvanceField held={held} used={advanceUsed} checked={wantAdvance} onChange={setWantAdvance} />
+            </CardContent>
+          )}
           {payment.status !== "UNPAID" && (
             <CardContent className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-1.5">
@@ -585,12 +618,12 @@ export function PurchaseCreatePage() {
                   allowDecimal
                   decimalPlaces={2}
                   disabled={payment.status === "PAID"}
-                  value={payment.status === "PAID" ? String(netTotalPreview) : payment.amount}
+                  value={payment.status === "PAID" ? String(paymentAmount) : payment.amount}
                   onChange={(e) => setPayment((p) => ({ ...p, amount: e.target.value }))}
                 />
                 {payment.status === "PARTIAL" && (
                   <p className="text-xs text-muted-foreground">
-                    Due after this payment: {formatTk(Math.max(0, netTotalPreview - paymentAmount))}
+                    Due after this payment: {formatTk(Math.max(0, netTotalPreview - advanceUsed - (paymentAmount || 0)))}
                   </p>
                 )}
               </div>
@@ -669,7 +702,7 @@ export function PurchaseCreatePage() {
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      {(expenseCategories?.results ?? []).map((e) => (
+                      {(expenseCategories?.results ?? []).filter((e) => e.code !== LOAN_INTEREST).map((e) => (
                         <SelectItem key={e.code} value={e.code}>
                           {e.label}
                         </SelectItem>

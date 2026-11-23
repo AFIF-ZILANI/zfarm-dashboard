@@ -11,7 +11,9 @@ import type { Purchase } from "@/pages/purchases/types";
 import type { Sale, BirdSale } from "@/pages/sales/types";
 import type { PaymentInstrument } from "@/pages/payments/types";
 import { PaymentCreateDialog } from "@/pages/payments/payment-create-dialog";
-import type { Payment } from "@/pages/payments/types";
+import { KIND_LABEL, type Payment } from "@/pages/payments/types";
+import { groupSupplierPayments, kindOf, totals } from "@/pages/payments/movements";
+import type { Supplier } from "@/pages/suppliers/types";
 
 export function PaymentsTab() {
   const [createOpen, setCreateOpen] = useState(false);
@@ -25,11 +27,21 @@ export function PaymentsTab() {
     "payment-instruments",
   ]);
 
+  const { data: suppliers } = useGetData<Paginated<Supplier>>("/suppliers?limit=100", ["suppliers"]);
+
   const instrumentLabel = (id: string | null) => instruments?.results.find((i) => i.id === id)?.label ?? "—";
 
   // Payment.ref_id is a polymorphic reference (see types.ts) — resolve a
   // human label per ref_type from whichever list actually has that record.
-  const refLabel = (p: Payment) => {
+  type Row = ReturnType<typeof groupSupplierPayments>[number];
+  const supplierName = (id: string | null | undefined) => suppliers?.results.find((s) => s.id === id)?.profile.name;
+  const refLabel = (p: Row) => {
+    if (p.supplier_payment_id) {
+      // A part on the old balance or an advance carries the supplier's id; one on a bill, the bill's.
+      const own = p.parts.find((x) => x.ref_type !== "PURCHASE");
+      const bill = purchases?.results.find((x) => x.id === p.ref_id);
+      return supplierName(own?.ref_id ?? bill?.supplier_id) ?? "Supplier";
+    }
     if (p.ref_type === "PURCHASE") {
       const purchase = purchases?.results.find((x) => x.id === p.ref_id);
       return purchase ? (purchase.invoice_no ?? "Purchase") : "Purchase";
@@ -43,26 +55,34 @@ export function PaymentsTab() {
       const batch = birdSale ? batches?.results.find((b) => b.id === birdSale.batch_id) : undefined;
       return batch?.batch_code ?? "Bird sale";
     }
-    return humanizeEnum(p.ref_type);
+    // Owner money, other, transfers: no bill to name, so the note says what it was.
+    return p.note ?? KIND_LABEL[p.ref_type] ?? humanizeEnum(p.ref_type);
   };
 
   const payments = data?.results ?? [];
-  const totalIncoming = payments.filter((p) => p.direction === "INCOMING").reduce((sum, p) => sum + parseFloat(p.amount), 0);
-  const totalOutgoing = payments.filter((p) => p.direction === "OUTGOING").reduce((sum, p) => sum + parseFloat(p.amount), 0);
+  // A transfer only moves money between the farm's own accounts: neither in nor out.
+  const { incoming: totalIncoming, outgoing: totalOutgoing } = totals(payments);
 
-  const columns: Column<Payment>[] = [
+  // One supplier payment is one line, however many bills it settled.
+  const rows = groupSupplierPayments(payments);
+
+  const columns: Column<Row>[] = [
     { key: "date", header: "Date", render: (p) => new Date(p.payment_date).toLocaleDateString() },
     {
       key: "direction",
       header: "Direction",
       render: (p) => (
-        <StatusBadge
-          tone={p.direction === "INCOMING" ? "success" : "warning"}
-          label={humanizeEnum(p.direction)}
-        />
+        p.ref_type === "TRANSFER" ? (
+          <StatusBadge tone="neutral" label="Transfer" />
+        ) : (
+          <StatusBadge
+            tone={p.direction === "INCOMING" ? "success" : "warning"}
+            label={humanizeEnum(p.direction)}
+          />
+        )
       ),
     },
-    { key: "ref_type", header: "Pays for", render: (p) => humanizeEnum(p.ref_type) },
+    { key: "ref_type", header: "Kind", render: kindOf },
     { key: "ref", header: "Record", render: (p) => refLabel(p) },
     { key: "amount", header: "Amount", render: (p) => formatTk(p.amount), numeric: true },
     { key: "from", header: "From", render: (p) => instrumentLabel(p.from_instrument_id) },
@@ -86,14 +106,14 @@ export function PaymentsTab() {
 
       <DataTable
         columns={columns}
-        rows={payments}
-        totalCount={data?.total}
+        rows={rows}
+        totalCount={data && data.total - (payments.length - rows.length)}
         rowKey={(p) => p.id}
         isLoading={isLoading}
         empty={{
           icon: Wallet,
           title: "No payments recorded yet",
-          description: "Record a payment against a purchase, sale, or bird sale.",
+          description: "Record money in or out: a bill, your own capital or draw, or a transfer between accounts.",
           action: { label: "Record payment", onClick: () => setCreateOpen(true) },
         }}
       />

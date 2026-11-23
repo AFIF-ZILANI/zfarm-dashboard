@@ -1,29 +1,24 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { ArrowLeft, Mail, MapPin, Package, Pencil, Phone, Receipt } from "lucide-react";
+import { ArrowLeft, Banknote, HandCoins, Mail, MapPin, Package, Pencil, Phone, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { KPICard } from "@/components/shared/kpi-card";
-import { DataTable, type Column } from "@/components/shared/data-table";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { activeStatus } from "@/components/shared/status-tone";
 import { usePageTitle } from "@/components/layout/use-page-title";
-import { useGetData, usePostData, type Paginated } from "@/lib/api";
-import { formatTk, humanizeEnum } from "@/lib/utils";
+import { useGetData, usePostData } from "@/lib/api";
+import { humanizeEnum } from "@/lib/utils";
 import type { Supplier } from "@/pages/suppliers/types";
 import { SupplierFormDialog } from "@/pages/suppliers/supplier-form-dialog";
-import { useOutstanding } from "@/pages/sales/use-outstanding";
-
-type Purchase = {
-  id: string;
-  invoice_no: string | null;
-  purchase_date: string;
-  total_amount: string;
-  paid_amount: string;
-  due_amount: string;
-};
+import { OpeningDialog } from "@/pages/suppliers/opening-dialog";
+import { PaySupplierDialog } from "@/pages/suppliers/pay-supplier-dialog";
+import { StatementCard } from "@/pages/suppliers/statement-card";
+import type { SupplierBalance, SupplierStatement } from "@/pages/suppliers/supplier-money-types";
+import { UseAdvanceDialog } from "@/pages/suppliers/use-advance-dialog";
+import { SupplierRefundDialog } from "@/pages/suppliers/supplier-refund-dialog";
 
 export function SupplierDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -33,11 +28,16 @@ export function SupplierDetailPage() {
   const { data: supplier, isLoading } = useGetData<Supplier>(`/suppliers/${id}`, ["suppliers", id]);
   usePageTitle(supplier?.profile.name ?? "Supplier");
 
-  const { data: purchases } = useGetData<Paginated<Purchase>>(`/purchases?supplier_id=${id}&limit=100`, [
-    "purchases",
-    "supplier",
-    id,
-  ]);
+  const { data: balances, isError: balancesError } = useGetData<SupplierBalance[]>("/suppliers/balances", ["suppliers", "balances"]);
+  // All dates: the card below has its own range.
+  const { data: statement, isError: statementError } = useGetData<SupplierStatement>(`/suppliers/${id}/statement?`, ["suppliers", id, "statement", "", ""]);
+  const balance = balances?.find((b) => b.supplier_id === id);
+  const owed = parseFloat(balance?.owed ?? "0");
+  const advance = parseFloat(balance?.advance ?? "0");
+  const [payOpen, setPayOpen] = useState(false);
+  const [useOpen, setUseOpen] = useState(false);
+  const [refundOpen, setRefundOpen] = useState(false);
+  const [openingOpen, setOpeningOpen] = useState(false);
 
   const deactivate = usePostData<Supplier, void>(`/suppliers/${id}/deactivate`, ["suppliers"]);
   const reactivate = usePostData<Supplier, void>(`/suppliers/${id}/reactivate`, ["suppliers"]);
@@ -50,33 +50,7 @@ export function SupplierDetailPage() {
     });
   };
 
-  const { trueAmounts, isLoading: outstandingLoading } = useOutstanding("PURCHASE");
-  const purchaseRows = purchases?.results ?? [];
-  const totalPurchased = purchaseRows.reduce((sum, p) => sum + parseFloat(p.total_amount), 0);
-  const totalDue = purchaseRows.reduce(
-    (sum, p) => sum + parseFloat(trueAmounts(p.id, p.paid_amount, p.due_amount).due),
-    0
-  );
-
-  const purchaseColumns: Column<Purchase>[] = [
-    { key: "date", header: "Date", render: (p) => new Date(p.purchase_date).toLocaleDateString() },
-    { key: "invoice", header: "Invoice", render: (p) => p.invoice_no ?? "—" },
-    { key: "total", header: "Total", render: (p) => formatTk(p.total_amount), numeric: true },
-    {
-      key: "paid",
-      header: "Paid",
-      render: (p) => formatTk(trueAmounts(p.id, p.paid_amount, p.due_amount).paid),
-      numeric: true,
-    },
-    {
-      key: "due",
-      header: "Due",
-      render: (p) => formatTk(trueAmounts(p.id, p.paid_amount, p.due_amount).due),
-      numeric: true,
-    },
-  ];
-
-  if (isLoading || outstandingLoading || !supplier) {
+  if (isLoading || !supplier) {
     return (
       <div className="flex flex-col gap-4">
         <Skeleton className="h-8 w-64" />
@@ -148,27 +122,45 @@ export function SupplierDetailPage() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
-        <KPICard label="Purchases" value={purchaseRows.length} icon={Package} />
-        <KPICard label="Total purchased" money={totalPurchased} icon={Receipt} />
-        <KPICard label="Outstanding due" money={totalDue} icon={Receipt} />
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <KPICard label="You owe" money={owed} icon={Banknote} isLoading={!balances && !balancesError} isError={balancesError} />
+        <KPICard label="Advance they hold" money={advance} icon={HandCoins} isLoading={!balances && !balancesError} isError={balancesError} />
+        <KPICard label="Bought" money={statement?.bought ?? 0} icon={Package} isLoading={!statement && !statementError} isError={statementError} />
+        <KPICard label="Paid" money={statement?.paid ?? 0} icon={Wallet} isLoading={!statement && !statementError} isError={statementError} />
       </div>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center gap-2">
-          <Receipt className="size-4 text-muted-foreground" />
-          <CardTitle className="text-base">Purchase history</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <DataTable
-            columns={purchaseColumns}
-            rows={purchaseRows}
-            rowKey={(p) => p.id}
-            empty={{ icon: Receipt, title: "No purchases recorded from this supplier yet" }}
-          />
-        </CardContent>
-      </Card>
+      <div className="flex flex-wrap gap-2">
+        <Button onClick={() => setPayOpen(true)}>
+          <Banknote />
+          Pay supplier
+        </Button>
+        {advance > 0 && owed > 0 && (
+          <Button variant="outline" onClick={() => setUseOpen(true)}>
+            Use advance
+          </Button>
+        )}
+        {advance > 0 && (
+          <Button variant="outline" onClick={() => setRefundOpen(true)}>
+            Refund
+          </Button>
+        )}
+        <Button variant="outline" onClick={() => setOpeningOpen(true)}>
+          Old balance
+        </Button>
+      </div>
 
+      <StatementCard supplierId={supplier.id} supplierName={supplier.profile.name} />
+
+      <PaySupplierDialog supplierId={supplier.id} supplierName={supplier.profile.name} open={payOpen} onOpenChange={setPayOpen} />
+      <UseAdvanceDialog supplierId={supplier.id} supplierName={supplier.profile.name} open={useOpen} onOpenChange={setUseOpen} />
+      <SupplierRefundDialog
+        supplierId={supplier.id}
+        supplierName={supplier.profile.name}
+        advance={advance}
+        open={refundOpen}
+        onOpenChange={setRefundOpen}
+      />
+      <OpeningDialog supplier={supplier} open={openingOpen} onOpenChange={setOpeningOpen} />
       <SupplierFormDialog open={editOpen} onOpenChange={setEditOpen} supplier={supplier} />
     </div>
   );

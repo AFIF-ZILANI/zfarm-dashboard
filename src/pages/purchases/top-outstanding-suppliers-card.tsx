@@ -5,39 +5,29 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { useGetData, type Paginated } from "@/lib/api";
 import { formatTk } from "@/lib/utils";
 import type { Supplier } from "@/pages/suppliers/types";
-import type { Purchase } from "@/pages/purchases/types";
-import { useOutstanding } from "@/pages/sales/use-outstanding";
+import type { SupplierBalance } from "@/pages/suppliers/supplier-money-types";
 
 const TOP_N = 5;
 
 export function TopOutstandingSuppliersCard() {
-  const {
-    data: purchases,
-    isLoading: purchasesLoading,
-    isError: purchasesError,
-  } = useGetData<Paginated<Purchase>>("/purchases?limit=100", ["purchases"]);
+  const { data: balances, isLoading: balancesLoading, isError: balancesError } = useGetData<SupplierBalance[]>("/suppliers/balances", [
+    "suppliers",
+    "balances",
+  ]);
   const {
     data: suppliers,
     isLoading: suppliersLoading,
     isError: suppliersError,
   } = useGetData<Paginated<Supplier>>("/suppliers?limit=100", ["suppliers"]);
-  const { trueAmounts, isLoading: outstandingLoading } = useOutstanding("PURCHASE");
-  const isLoading = purchasesLoading || suppliersLoading || outstandingLoading;
-  const isError = purchasesError || suppliersError;
+  const isLoading = balancesLoading || suppliersLoading;
+  const isError = balancesError || suppliersError;
 
-  const dueBySupplier = new Map<string, number>();
-  for (const p of purchases?.results ?? []) {
-    if (!p.supplier_id) continue;
-    const due = parseFloat(trueAmounts(p.id, p.paid_amount, p.due_amount).due);
-    dueBySupplier.set(p.supplier_id, (dueBySupplier.get(p.supplier_id) ?? 0) + due);
-  }
-
-  const ranked = Array.from(dueBySupplier.entries())
-    .filter(([, due]) => due > 0)
-    .map(([supplierId, due]) => ({
-      supplierId,
-      due,
-      name: suppliers?.results.find((s) => s.id === supplierId)?.profile.name ?? "Unknown supplier",
+  const ranked = (balances ?? [])
+    .filter((b) => parseFloat(b.owed) > 0)
+    .map((b) => ({
+      supplierId: b.supplier_id,
+      due: parseFloat(b.owed),
+      name: suppliers?.results.find((s) => s.id === b.supplier_id)?.profile.name ?? "Unknown supplier",
     }))
     .sort((a, b) => b.due - a.due)
     .slice(0, TOP_N);

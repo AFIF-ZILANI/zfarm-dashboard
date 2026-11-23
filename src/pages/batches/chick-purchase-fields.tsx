@@ -4,6 +4,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { NumericInput, PositiveIntegerInput } from "@/components/utils/NumaricInput";
 import { FarmAccountSelect } from "@/components/shared/farm-account-select";
 import { formatTk } from "@/lib/utils";
+import { Link } from "react-router";
+import { AdvanceField } from "@/pages/suppliers/advance-field";
 import type { Supplier } from "@/pages/suppliers/types";
 import {
   CHICK_ITEM_NAME,
@@ -48,6 +50,11 @@ export function ChickPurchaseFields({
             ))}
           </SelectContent>
         </Select>
+        {suppliers.length === 0 && (
+          <Link to="/suppliers" className="text-xs font-medium text-primary underline-offset-4 hover:underline">
+            Add a supplier
+          </Link>
+        )}
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="invoice_no">Invoice no. (optional)</Label>
@@ -95,31 +102,43 @@ export function ChickPurchaseFields({
 export function ChickPaymentFields({
   chicks,
   setChick,
-  total,
+  defaultBilled,
+  held,
 }: {
   chicks: ChickPurchase;
   setChick: (patch: Partial<ChickPurchase>) => void;
-  total: number;
+  defaultBilled: number;
+  /** The advance the supplier holds. */
+  held: number;
 }) {
+  const { total, advanceUsed, paymentAmount } = chickTotals(chicks, defaultBilled, held);
+  const advance = (
+    <AdvanceField held={held} used={advanceUsed} checked={chicks.use_advance} onChange={(use_advance) => setChick({ use_advance })} />
+  );
   if (chicks.status === "UNPAID") {
     return (
-      <p className="text-xs text-muted-foreground">{formatTk(total)} stays due to the supplier — pay it later from Payments.</p>
+      <div className="flex flex-col gap-3">
+        {advance}
+        <p className="text-xs text-muted-foreground">
+          {formatTk(Math.max(0, total - advanceUsed))} stays due to the supplier. Pay it later from their page.
+        </p>
+      </div>
     );
   }
-  const paid = chicks.status === "PAID" ? total : Number(chicks.amount);
   return (
     <div className="grid gap-4 sm:grid-cols-2">
+      {held > 0 && <div className="sm:col-span-2">{advance}</div>}
       <div className="flex flex-col gap-1.5">
         <Label>Amount (৳)</Label>
         <NumericInput
           allowDecimal
           decimalPlaces={2}
           disabled={chicks.status === "PAID"}
-          value={chicks.status === "PAID" ? String(total) : chicks.amount}
+          value={chicks.status === "PAID" ? String(paymentAmount) : chicks.amount}
           onChange={(e) => setChick({ amount: e.target.value })}
         />
         {chicks.status === "PARTIAL" && (
-          <p className="text-xs text-muted-foreground">Due after this payment: {formatTk(Math.max(0, total - (paid || 0)))}</p>
+          <p className="text-xs text-muted-foreground">Due after this payment: {formatTk(Math.max(0, total - advanceUsed - (paymentAmount || 0)))}</p>
         )}
       </div>
       <div className="flex flex-col gap-1.5">

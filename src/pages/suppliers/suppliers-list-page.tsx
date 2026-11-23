@@ -9,8 +9,9 @@ import { StatusBadge } from "@/components/shared/status-badge";
 import { activeStatus } from "@/components/shared/status-tone";
 import { usePageTitle } from "@/components/layout/use-page-title";
 import { useGetData, type Paginated } from "@/lib/api";
-import { humanizeEnum } from "@/lib/utils";
+import { formatTk, humanizeEnum } from "@/lib/utils";
 import { SUPPLIER_ROLES, type Supplier, type SupplierRole } from "@/pages/suppliers/types";
+import type { SupplierBalance } from "@/pages/suppliers/supplier-money-types";
 import { SupplierFormDialog } from "@/pages/suppliers/supplier-form-dialog";
 
 export function SuppliersListPage() {
@@ -24,6 +25,12 @@ export function SuppliersListPage() {
   const query = new URLSearchParams({ limit: "100" });
   if (roleFilter !== "ALL") query.set("role", roleFilter);
   const { data, isLoading } = useGetData<Paginated<Supplier>>(`/suppliers?${query}`, ["suppliers", roleFilter]);
+
+  const { data: balances } = useGetData<SupplierBalance[]>("/suppliers/balances", ["suppliers", "balances"]);
+  const balanceOf = (id: string) => {
+    const b = balances?.find((x) => x.supplier_id === id);
+    return b ? { owed: parseFloat(b.owed), advance: parseFloat(b.advance) } : undefined;
+  };
 
   const suppliers = data?.results ?? [];
   const totalSuppliers = data?.total ?? suppliers.length;
@@ -52,6 +59,30 @@ export function SuppliersListPage() {
           )}
         </div>
       ),
+    },
+    {
+      key: "balance",
+      header: "Balance",
+      numeric: true,
+      // Both can be true at once: an old bill still due while they hold an advance for the next.
+      render: (s) => {
+        const b = balanceOf(s.id);
+        if (!b) return "—";
+        return (
+          <span className="block">
+            {(b.owed > 0 || b.advance <= 0) && <span className="block">{formatTk(b.owed)}</span>}
+            {b.advance > 0 && <span className="block text-success">Advance {formatTk(b.advance)}</span>}
+          </span>
+        );
+      },
+      sortValue: (s) => {
+        const b = balanceOf(s.id);
+        return b ? b.owed - b.advance : 0;
+      },
+      exportValue: (s) => {
+        const b = balanceOf(s.id);
+        return b ? b.owed - b.advance : null;
+      },
     },
     {
       key: "status",
