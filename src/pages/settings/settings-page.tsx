@@ -45,7 +45,7 @@ const GROUPS: Group[] = [
               creation, coded-unit binding) that reference those specific categories.
             </p>
             <LookupManagerCard title="Item Categories" singular="Item Category" endpoint="/item-categories" queryKey="item-categories" icon={Package} />
-            <LookupManagerCard title="Units" singular="Unit" endpoint="/units" queryKey="units" icon={Ruler} />
+            <LookupManagerCard title="Units" singular="Unit" endpoint="/units" queryKey="units" icon={Ruler} freeLabel />
             <LookupManagerCard title="Expense Categories" singular="Expense Category" endpoint="/expense-categories" queryKey="expense-categories" icon={Layers} />
             <LookupManagerCard
               title="Supplier Supply Categories"

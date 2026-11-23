@@ -13,6 +13,7 @@ import type { StockUnit } from "@/pages/inventory/types";
 import type { PurchaseItemLine } from "@/pages/purchases/types";
 import { BindCodeDialog } from "@/pages/inventory/bind-code-dialog";
 import { CodePrintSheet } from "@/pages/inventory/code-print-sheet";
+import { useUnitLabel } from "@/pages/inventory/use-unit-label";
 
 const copy = (text: string, what: string) =>
   void navigator.clipboard.writeText(text).then(
@@ -31,6 +32,7 @@ type PurchaseLotSheetProps = {
 /** One purchase line (lot) and the QR codes bound to it: copy one or all, reprint the labels, or bind
  *  the rest when the lot isn't fully coded yet. */
 export function PurchaseLotSheet({ lot, landedUnitCost, onOpenChange }: PurchaseLotSheetProps) {
+  const unitLabel = useUnitLabel();
   const [bindOpen, setBindOpen] = useState(false);
   const [printOpen, setPrintOpen] = useState(false);
   const queryClient = useQueryClient();
@@ -61,7 +63,7 @@ export function PurchaseLotSheet({ lot, landedUnitCost, onOpenChange }: Purchase
             <SheetHeader>
               <SheetTitle>{lot.item.name}</SheetTitle>
               <SheetDescription>
-                {lot.quantity} {humanizeEnum(lot.unit).toLowerCase()} · {humanizeEnum(lot.item.category)}
+                {lot.quantity} {unitLabel(lot.unit).toLowerCase()} · {humanizeEnum(lot.item.category)}
               </SheetDescription>
             </SheetHeader>
 

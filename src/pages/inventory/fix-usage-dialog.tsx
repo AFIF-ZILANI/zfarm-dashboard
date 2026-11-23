@@ -12,7 +12,7 @@ import { useGetData, usePatchData, usePostData, type Paginated } from "@/lib/api
 import { humanizeEnum } from "@/lib/utils";
 import type { Consumption, StockUnit } from "@/pages/inventory/types";
 import { formatEntered } from "@/pages/inventory/stock-qty";
-import type { LookupRow } from "@/pages/settings/lookup-types";
+import { useUnitLabel } from "@/pages/inventory/use-unit-label";
 
 // Local calendar day: toISOString() is UTC, which is still "yesterday" until 06:00 in Bangladesh.
 const localDay = (d: Date) => d.toLocaleDateString("en-CA");
@@ -57,8 +57,7 @@ export function FixUsageDialog({ consumption, onClose }: FixUsageDialogProps) {
     ...(detail?.vaccinations ?? []).map((v) => (v.schedule_id ? `vaccine schedule step (${v.vaccine_name})` : `vaccination ${v.vaccine_name}`)),
   ];
 
-  const { data: units } = useGetData<Paginated<LookupRow>>("/units?active=true&limit=100", ["units", "active"]);
-  const unitLabel = (c: string) => units?.results.find((u) => u.code === c)?.label ?? humanizeEnum(c);
+  const unitLabel = useUnitLabel();
   const usableUnits = [item.unit, ...(item.itemUnits ?? []).filter((u) => u.is_usable && u.unit !== item.unit).map((u) => u.unit)];
 
   // The right bottle, by its code: the id is the QR payload, a fragment works (same lookup as Record by code).
@@ -112,7 +111,7 @@ export function FixUsageDialog({ consumption, onClose }: FixUsageDialogProps) {
         <DialogHeader>
           <DialogTitle>Fix usage</DialogTitle>
           <DialogDescription>
-            {formatEntered(consumption.quantity, consumption.unit, item)} {item.name} in {consumption.house.name}
+            {formatEntered(consumption.quantity, consumption.unit, item, unitLabel)} {item.name} in {consumption.house.name}
             {consumption.batch ? `, batch ${consumption.batch.batch_code}` : ""} on {new Date(consumption.date).toLocaleDateString()}.
             Enter what really happened; stock and the batch's cost follow.
           </DialogDescription>

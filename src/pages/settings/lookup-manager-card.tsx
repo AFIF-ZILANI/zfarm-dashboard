@@ -43,15 +43,17 @@ type LookupManagerCardProps = {
   endpoint: string;
   queryKey: string;
   icon: LucideIcon;
+  /** Names in any script with decimals (units: "Bag 12.5kg", "ছোট বস্তা"), not just letters and digits. */
+  freeLabel?: boolean;
 };
 
-export function LookupManagerCard({ title, singular, endpoint, queryKey, icon: Icon }: LookupManagerCardProps) {
+export function LookupManagerCard({ title, singular, endpoint, queryKey, icon: Icon, freeLabel = false }: LookupManagerCardProps) {
   const [formOpen, setFormOpen] = useState(false);
   const [editingRow, setEditingRow] = useState<LookupRow | undefined>(undefined);
   const [label, setLabel] = useState("");
   const { confirm, confirmDialog } = useConfirm();
 
-  const { data, isLoading } = useGetData<Paginated<LookupRow>>(`${endpoint}?limit=100`, [queryKey]);
+  const { data, isLoading } = useGetData<Paginated<LookupRow>>(`${endpoint}?limit=1000`, [queryKey]);
   const rows = data?.results ?? [];
 
   const create = usePostData<LookupRow, { label: string }>(endpoint, [queryKey]);
@@ -199,10 +201,11 @@ export function LookupManagerCard({ title, singular, endpoint, queryKey, icon: I
             <Input
               id="lookup-label"
               value={label}
-              onChange={(e) => setLabel(filterLabelInput(e.target.value))}
+              maxLength={freeLabel ? 40 : undefined}
+              onChange={(e) => setLabel(freeLabel ? e.target.value : filterLabelInput(e.target.value))}
               autoFocus
             />
-            {label.trim() && (
+            {label.trim() && !freeLabel && (
               <p className="text-xs text-muted-foreground">Code: {previewCode(label) || "—"}</p>
             )}
           </div>

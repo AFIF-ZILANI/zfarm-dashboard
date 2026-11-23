@@ -18,10 +18,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { NumericInput } from "@/components/utils/NumaricInput";
 import { useGetData, usePostData, type Paginated } from "@/lib/api";
-import { humanizeEnum } from "@/lib/utils";
 import type { Item, Warehouse, LocationStockRow } from "@/pages/inventory/types";
 import type { House } from "@/pages/houses/types";
-import type { LookupRow } from "@/pages/settings/lookup-types";
+import { useUnitLabel } from "@/pages/inventory/use-unit-label";
 import { formatStock } from "@/pages/inventory/stock-qty";
 
 type LocationOption = { value: string; type: "WAREHOUSE" | "HOUSE"; id: string; label: string };
@@ -76,8 +75,7 @@ export function TransferFormDialog({ open, onOpenChange }: TransferFormDialogPro
   const items = allItems?.results.filter((i) => !i.is_unit_tracked);
   const { data: warehouses } = useGetData<Paginated<Warehouse>>("/warehouses?limit=100", ["warehouses"]);
   const { data: houses } = useGetData<Paginated<House>>("/houses?limit=100", ["houses"]);
-  const { data: units } = useGetData<Paginated<LookupRow>>("/units?active=true&limit=100", ["units", "active"]);
-  const unitLabel = (code: string) => units?.results.find((u) => u.code === code)?.label ?? humanizeEnum(code);
+  const unitLabel = useUnitLabel();
 
   const locationOptions: LocationOption[] = [
     ...(warehouses?.results ?? []).map((w) => ({

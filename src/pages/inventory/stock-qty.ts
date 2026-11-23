@@ -28,8 +28,13 @@ export function formatStock(total: number | string, item: Pick<Item, "unit" | "i
 
 /** A quantity as entered (a purchase line, a draw): in the base unit it reads like stock; in any other
  * unit ("10 Bag", "2 Container") it stays as entered. */
-export function formatEntered(quantity: number | string, unit: string, item: Pick<Item, "unit" | "itemUnits"> | undefined) {
+export function formatEntered(
+  quantity: number | string,
+  unit: string,
+  item: Pick<Item, "unit" | "itemUnits"> | undefined,
+  unitLabel: (code: string) => string = humanizeEnum
+) {
   if (item && unit === item.unit) return formatStock(quantity, item);
   if (unit === "BAG") return `${formatQty(Number(quantity))} Bag`;
-  return `${formatQty(Number(quantity))} ${humanizeEnum(unit).toLowerCase()}`;
+  return `${formatQty(Number(quantity))} ${unitLabel(unit).toLowerCase()}`;
 }

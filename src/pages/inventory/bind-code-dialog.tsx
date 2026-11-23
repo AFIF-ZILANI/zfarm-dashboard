@@ -21,6 +21,7 @@ import { useGetData, usePostData, type Paginated } from "@/lib/api";
 import { humanizeEnum } from "@/lib/utils";
 import type { Item, PurchaseItemOption, StockUnit } from "@/pages/inventory/types";
 import type { PurchaseItemLine } from "@/pages/purchases/types";
+import { useUnitLabel } from "@/pages/inventory/use-unit-label";
 
 const bindSchema = z.object({
   purchase_item_id: z.string().min(1, "Select a purchase lot"),
@@ -41,6 +42,7 @@ type BindCodeDialogProps = {
 };
 
 export function BindCodeDialog({ open, onOpenChange, scopedLots, unit }: BindCodeDialogProps) {
+  const unitLabel = useUnitLabel();
   const [code, setCode] = useState("");
   const [lookupId, setLookupId] = useState<string | null>(null);
   const [itemFilter, setItemFilter] = useState("");
@@ -82,7 +84,7 @@ export function BindCodeDialog({ open, onOpenChange, scopedLots, unit }: BindCod
   // In scoped mode the lots are already known (the just-created purchase's
   // own line items) -- no item→lot search needed, just pick from these.
   const lotOptions: { id: string; label: string }[] = scopedLots
-    ? scopedLots.map((lot) => ({ id: lot.id, label: `${lot.item.name} — qty ${lot.quantity} ${lot.unit}` }))
+    ? scopedLots.map((lot) => ({ id: lot.id, label: `${lot.item.name} — qty ${lot.quantity} ${unitLabel(lot.unit)}` }))
     : (purchaseItems?.results ?? []).map((lot) => ({
         id: lot.id,
         label: `${new Date(lot.purchase.purchase_date).toLocaleDateString()} — qty ${lot.quantity}`,

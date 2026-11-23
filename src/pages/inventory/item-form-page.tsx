@@ -3,6 +3,7 @@ import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router";
 import { ArrowLeft, Loader2, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,14 +17,13 @@ import { usePageTitle } from "@/components/layout/use-page-title";
 import { useDelete, useGetData, usePatchData, usePostData, type ApiError, type Paginated } from "@/lib/api";
 import { humanizeEnum } from "@/lib/utils";
 import { optionalNumber } from "@/lib/zod-helpers";
-import { GENERIC_ITEM_UNITS, type Item, type ItemUnit, type Organization, type UnitRow } from "@/pages/inventory/types";
+import { EMPTY_STAGED, draftProblem, isCustom, withStaged, type UnitDraft } from "@/pages/inventory/item-units";
+import { ItemUnitsCard } from "@/pages/inventory/item-units-card";
+import type { Item, Organization } from "@/pages/inventory/types";
+import { useUnitLabel, useUnits } from "@/pages/inventory/use-unit-label";
 import type { LookupRow } from "@/pages/settings/lookup-types";
 
-type PendingUnit = { unit: string; factor_to_base: string; is_purchasable: boolean; is_usable: boolean };
 type MetaRow = { key: string; value: string };
-
-/** Value of the "Custom unit…" choice in the unit picker. Lower case, so it can't match a real unit code. */
-const CUSTOM_UNIT = "__custom__";
 
 const itemSchema = z.object({
   name: z.string().trim().min(1, "Name is required"),
@@ -76,12 +76,9 @@ export function ItemFormPage() {
     },
   });
 
-  const [pendingUnits, setPendingUnits] = useState<PendingUnit[]>([]);
-  const [newUnitCode, setNewUnitCode] = useState("");
-  const [newUnitName, setNewUnitName] = useState("");
-  const [newUnitFactor, setNewUnitFactor] = useState("");
-  const [newUnitPurchasable, setNewUnitPurchasable] = useState(true);
-  const [newUnitUsable, setNewUnitUsable] = useState(false);
+  const [unitRows, setUnitRows] = useState<UnitDraft[]>([]);
+  const [stagedUnit, setStagedUnit] = useState(EMPTY_STAGED);
+  const [stagedError, setStagedError] = useState<string | null>(null);
   const [reorderUnit, setReorderUnit] = useState("");
   const [reorderValue, setReorderValue] = useState("");
   const [reorderError, setReorderError] = useState<string | null>(null);
@@ -94,6 +91,8 @@ export function ItemFormPage() {
   const [lastResetKey, setLastResetKey] = useState<string | null>(null);
   if (resetKey !== null && resetKey !== lastResetKey) {
     setLastResetKey(resetKey);
+    setStagedUnit(EMPTY_STAGED);
+    setStagedError(null);
     if (item) {
       reset({
         name: item.name,
@@ -104,9 +103,10 @@ export function ItemFormPage() {
         is_unit_tracked: item.is_unit_tracked,
         is_farm_made: item.is_farm_made,
       });
-      setPendingUnits(
+      setUnitRows(
         (item.itemUnits ?? []).map((u) => ({
-          unit: u.unit,
+          code: u.unit,
+          name: "",
           factor_to_base: u.factor_to_base,
           is_purchasable: u.is_purchasable,
           is_usable: u.is_usable,
@@ -125,7 +125,7 @@ export function ItemFormPage() {
         is_unit_tracked: false,
       is_farm_made: false,
       });
-      setPendingUnits([]);
+      setUnitRows([]);
       setReorderUnit("");
       setReorderValue("");
       setMetaRows([]);
@@ -139,112 +139,33 @@ export function ItemFormPage() {
     "/item-categories?active=true&limit=100",
     ["item-categories", "active"]
   );
-  const { data: units } = useGetData<Paginated<UnitRow>>("/units?active=true&limit=100", ["units", "active"]);
+  const units = useUnits();
+  const unitLabel = useUnitLabel();
+  const originalUnits = (item?.itemUnits ?? []).map((u) => u.unit);
 
-  const createItem = usePostData<Item, Record<string, unknown>>("/items", ["items"]);
-  const updateItem = usePatchData<Item, Record<string, unknown>>(`/items/${id}`, ["items"]);
+  // Saving an item can create units (custom names), so the unit list is refetched too.
+  const queryClient = useQueryClient();
+  const refreshUnits = { onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["units"] }) };
+  const createItem = usePostData<Item, Record<string, unknown>>("/items", ["items"], refreshUnits);
+  const updateItem = usePatchData<Item, Record<string, unknown>>(`/items/${id}`, ["items"], refreshUnits);
   const mutation = isEdit ? updateItem : createItem;
   const linkOrganization = usePostData<unknown, { item_id: string; organization_id: string; role: string }>(
     "/item-organizations",
     ["organizations"]
   );
-  const createItemUnit = usePostData<
-    ItemUnit,
-    { item_id: string; unit: string; factor_to_base: number; is_purchasable: boolean; is_usable: boolean }
-  >("/item-units", ["items"]);
-  const createUnit = usePostData<UnitRow, { label: string; base_unit: string }>("/units", ["units"]);
-  const deleteItemUnit = useDelete<null, string>((unitId) => `/item-units/${unitId}`, ["items"]);
   const unlinkOrganization = useDelete<null, string>((linkId) => `/item-organizations/${linkId}`, ["organizations"]);
 
   const baseUnit = useWatch({ control, name: "unit" });
   // An item is QR-tracked or made on the farm, never both: each switch turns the other off.
   const unitTracked = useWatch({ control, name: "is_unit_tracked" });
   const farmMade = useWatch({ control, name: "is_farm_made" });
-  const usedUnitCodes = new Set([baseUnit, ...pendingUnits.map((u) => u.unit)]);
-  // A unit belongs to this item's base-unit family if it's tied to that specific base (LITER -> ML)
-  // or generic across every family (Container, null base_unit) -- never one of the 6 bases itself,
-  // and never a unit tied to a different family (LITER can't convert a Gram-based item).
-  const addableUnits = (units?.results ?? []).filter(
-    (u) => !usedUnitCodes.has(u.code) && !u.is_base && (u.base_unit === baseUnit || GENERIC_ITEM_UNITS.has(u.code))
-  );
-  const unitLabel = (code: string) => units?.results.find((u) => u.code === code)?.label ?? humanizeEnum(code);
-  const unitFixedFactor = (code: string) => units?.results.find((u) => u.code === code)?.fixed_factor ?? null;
-
-  const customUnit = newUnitCode === CUSTOM_UNIT;
-  const stagedFactor = Number(newUnitFactor);
-  const unitStaged =
-    (customUnit ? newUnitName.trim() !== "" : newUnitCode !== "") &&
-    Number.isFinite(stagedFactor) &&
-    stagedFactor > 0 &&
-    (newUnitPurchasable || newUnitUsable);
-
-  /** The unit list including whatever is filled in on the add row. A custom name becomes a real unit first
-   * (shared by every item of this base unit; the size stays per item). Null when that was refused. */
-  const withStagedUnit = async (): Promise<PendingUnit[] | null> => {
-    if (!unitStaged) return pendingUnits;
-    let code = newUnitCode;
-    if (customUnit) {
-      const label = newUnitName.trim();
-      // Typing the name of a unit that's already offered just picks that one.
-      const existing = addableUnits.find((u) => u.label.toLowerCase() === label.toLowerCase());
-      if (existing && existing.fixed_factor !== null) {
-        toast.error(`"${existing.label}" has a fixed size. Pick it from the list.`);
-        return null;
-      }
-      try {
-        code = existing?.code ?? (await createUnit.mutateAsync({ label, base_unit: baseUnit })).code;
-      } catch (e) {
-        toast.error((e as ApiError).message);
-        return null;
-      }
-    }
-    const next = [
-      ...pendingUnits,
-      { unit: code, factor_to_base: newUnitFactor, is_purchasable: newUnitPurchasable, is_usable: newUnitUsable },
-    ];
-    setPendingUnits(next);
-    setNewUnitCode("");
-    setNewUnitName("");
-    setNewUnitFactor("");
-    setNewUnitPurchasable(true);
-    setNewUnitUsable(false);
-    return next;
-  };
-
-  /** No PATCH on ItemUnit -- a changed factor or purpose flag is a delete-then-recreate of that
-   * unit's row, same as an untouched removal. Deletes run first so a re-added unit doesn't collide
-   * with the row it's replacing (item_id+unit is unique). */
-  async function syncItemUnits(itemId: string, units: PendingUnit[]) {
-    const original = item?.itemUnits ?? [];
-    const changed = (o: ItemUnit, p: PendingUnit) =>
-      p.factor_to_base !== o.factor_to_base || p.is_purchasable !== o.is_purchasable || p.is_usable !== o.is_usable;
-    const toRemove = original.filter((o) => {
-      const kept = units.find((p) => p.unit === o.unit);
-      return !kept || changed(o, kept);
-    });
-    const toAdd = units.filter((p) => {
-      const orig = original.find((o) => o.unit === p.unit);
-      return !orig || changed(orig, p);
-    });
-    for (const row of toRemove) {
-      await deleteItemUnit.mutateAsync(row.id);
-    }
-    for (const row of toAdd) {
-      await createItemUnit.mutateAsync({
-        item_id: itemId,
-        unit: row.unit,
-        factor_to_base: Number(row.factor_to_base),
-        is_purchasable: row.is_purchasable,
-        is_usable: row.is_usable,
-      });
-    }
-  }
-
   // Reorder level is entered in whichever purchasable unit is convenient, then converted to the
   // item's base unit for storage -- Item.reorder_level has always been in base-unit terms.
   const purchasableUnits = [
     ...(baseUnit ? [{ code: baseUnit, label: unitLabel(baseUnit) }] : []),
-    ...pendingUnits.filter((u) => u.is_purchasable).map((u) => ({ code: u.unit, label: unitLabel(u.unit) })),
+    ...unitRows
+      .filter((u) => u.is_purchasable)
+      .map((u) => ({ code: u.code, label: isCustom(u) ? u.name : unitLabel(u.code) })),
   ];
   const reorderUnitValue = purchasableUnits.some((u) => u.code === reorderUnit) ? reorderUnit : (baseUnit ?? "");
 
@@ -261,7 +182,7 @@ export function ItemFormPage() {
     const reorderFactor =
       reorderUnitValue === baseUnit
         ? 1
-        : Number(pendingUnits.find((u) => u.unit === reorderUnitValue)?.factor_to_base ?? 1);
+        : Number(unitRows.find((u) => u.code === reorderUnitValue)?.factor_to_base ?? 1);
     let reorder_level: number | undefined;
     if (reorderValue !== "") {
       const raw = Number(reorderValue);
@@ -272,22 +193,33 @@ export function ItemFormPage() {
       reorder_level = raw * reorderFactor;
     }
 
+    // A unit filled in on the add row but never clicked Add still counts -- otherwise it's silently dropped.
+    const staged = withStaged(unitRows, stagedUnit, values.unit, units);
+    if ("error" in staged) {
+      setStagedError(staged.error);
+      toast.error(`Finish adding the unit first: ${staged.error}`);
+      return;
+    }
+    const rowProblem = staged.rows.map((u) => draftProblem(u, values.unit, units, originalUnits)).find(Boolean);
+    if (rowProblem) {
+      toast.error(rowProblem);
+      return;
+    }
+
     const { organization_id, unit, ...rest } = values;
     const payload: Record<string, unknown> = {
       ...rest,
       ...(!isEdit && { unit }),
       reorder_level,
       meta_data: buildMetaData(),
+      // Saved with the item or not at all, so an item can't end up without its units.
+      units: staged.rows.map((u) => ({
+        ...(isCustom(u) ? { label: u.name } : { unit: u.code }),
+        factor_to_base: Number(u.factor_to_base),
+        is_purchasable: u.is_purchasable,
+        is_usable: u.is_usable,
+      })),
     };
-
-    // A unit picked in the "Add a unit" row but never clicked Add still counts -- otherwise it's
-    // silently dropped on save.
-    if (customUnit && newUnitName.trim() !== "" && !unitStaged) {
-      toast.error(`Finish adding "${newUnitName.trim()}": enter its factor and tick Purchasable or Usable.`);
-      return;
-    }
-    const units = await withStagedUnit();
-    if (!units) return;
 
     let savedItem: Item;
     try {
@@ -309,13 +241,6 @@ export function ItemFormPage() {
       }
       if (!hadFieldError) toast.error(error.message);
       return;
-    }
-
-    // Awaited (not fire-and-forget) so the button's loading state covers the whole save.
-    try {
-      await syncItemUnits(savedItem.id, units);
-    } catch {
-      toast.warning("Item saved, but updating its units failed. Try again from Edit.");
     }
 
     if (organization_id !== currentManufacturerId) {
@@ -405,14 +330,14 @@ export function ItemFormPage() {
                         <SelectValue>
                           {(value: string) =>
                             value
-                              ? (units?.results.find((u) => u.code === value)?.label ?? humanizeEnum(value))
+                              ? unitLabel(value)
                               : "Select unit"
                           }
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent>
-                        {(units?.results ?? [])
-                          .filter((u) => u.is_base)
+                        {units
+                          .filter((u) => u.is_base && u.is_active)
                           .map((unitOption) => (
                             <SelectItem key={unitOption.code} value={unitOption.code}>
                               {unitOption.label}
@@ -426,7 +351,7 @@ export function ItemFormPage() {
                 <p className="text-xs text-muted-foreground">
                   {isEdit
                     ? "Can't be changed after the item is created."
-                    : "One of the 6 canonical base units — every purchasable/usable unit below converts to this."}
+                    : "Stock is counted in this. Every unit below converts to it."}
                 </p>
               </div>
             </div>
@@ -472,144 +397,18 @@ export function ItemFormPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Unit conversions</CardTitle>
-            <p className="text-xs text-muted-foreground">
-              Only units belonging to this item's base-unit family are offered — e.g. a Gram-based item can add
-              Bag or Metric Ton, but not Liter. A unit with a fixed conversion (like Liter or Metric Ton) has its
-              factor locked in automatically; package-size units (Bag, Bottle, Container) stay editable. Pick
-              "Custom unit…" to name your own, e.g. Small Bag and Big Bag.
-            </p>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2">
-            {baseUnit && (
-              <div className="flex items-center justify-between rounded-md border border-border bg-muted/40 px-2.5 py-1.5 text-sm">
-                <span>{unitLabel(baseUnit)}</span>
-                <span className="text-xs text-muted-foreground">base unit · always purchasable &amp; usable</span>
-              </div>
-            )}
-
-            {pendingUnits.map((row, index) => {
-              const fixedFactor = unitFixedFactor(row.unit);
-              return (
-              <div key={row.unit} className="flex items-center gap-3">
-                <span className="w-24 text-sm">{unitLabel(row.unit)}</span>
-                <span className="text-xs text-muted-foreground">1 {unitLabel(row.unit)} =</span>
-                <NumericInput
-                  allowDecimal
-                  decimalPlaces={4}
-                  className="w-24"
-                  disabled={fixedFactor !== null}
-                  value={fixedFactor ?? row.factor_to_base}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    setPendingUnits((prev) => prev.map((p, i) => (i === index ? { ...p, factor_to_base: value } : p)));
-                  }}
-                />
-                <span className="text-xs text-muted-foreground">{baseUnit ? unitLabel(baseUnit) : ""}</span>
-                <label className="flex items-center gap-1.5 text-xs">
-                  <Checkbox
-                    checked={row.is_purchasable}
-                    onCheckedChange={(checked) =>
-                      setPendingUnits((prev) =>
-                        prev.map((p, i) => (i === index ? { ...p, is_purchasable: Boolean(checked) } : p))
-                      )
-                    }
-                  />
-                  Purchasable
-                </label>
-                <label className="flex items-center gap-1.5 text-xs">
-                  <Checkbox
-                    checked={row.is_usable}
-                    onCheckedChange={(checked) =>
-                      setPendingUnits((prev) =>
-                        prev.map((p, i) => (i === index ? { ...p, is_usable: Boolean(checked) } : p))
-                      )
-                    }
-                  />
-                  Usable
-                </label>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  className="ml-auto"
-                  aria-label={`Remove ${unitLabel(row.unit)}`}
-                  onClick={() => setPendingUnits((prev) => prev.filter((_, i) => i !== index))}
-                >
-                  <X />
-                </Button>
-              </div>
-              );
-            })}
-
-            <div className="flex flex-wrap items-center gap-3">
-              <Select
-                value={newUnitCode}
-                onValueChange={(v) => {
-                  const code = v ?? "";
-                  setNewUnitCode(code);
-                  setNewUnitName("");
-                  setNewUnitFactor(unitFixedFactor(code) ?? "");
-                }}
-              >
-                <SelectTrigger className="w-40">
-                  <SelectValue>
-                    {(v: string) => (v === CUSTOM_UNIT ? "Custom unit…" : v ? unitLabel(v) : "Add a unit")}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {addableUnits.map((u) => (
-                    <SelectItem key={u.code} value={u.code}>
-                      {u.label}
-                    </SelectItem>
-                  ))}
-                  {baseUnit && <SelectItem value={CUSTOM_UNIT}>Custom unit…</SelectItem>}
-                </SelectContent>
-              </Select>
-              {customUnit && (
-                <Input
-                  className="w-40"
-                  placeholder="e.g. Small Bag"
-                  aria-label="Custom unit name"
-                  maxLength={40}
-                  autoFocus
-                  value={newUnitName}
-                  onChange={(e) => setNewUnitName(e.target.value)}
-                />
-              )}
-              <span className="text-xs text-muted-foreground">factor =</span>
-              <NumericInput
-                allowDecimal
-                decimalPlaces={4}
-                placeholder="e.g. 50"
-                className="w-24"
-                disabled={unitFixedFactor(newUnitCode) !== null}
-                value={newUnitFactor}
-                onChange={(e) => setNewUnitFactor(e.target.value)}
-              />
-              <label className="flex items-center gap-1.5 text-xs">
-                <Checkbox checked={newUnitPurchasable} onCheckedChange={(c) => setNewUnitPurchasable(Boolean(c))} />
-                Purchasable
-              </label>
-              <label className="flex items-center gap-1.5 text-xs">
-                <Checkbox checked={newUnitUsable} onCheckedChange={(c) => setNewUnitUsable(Boolean(c))} />
-                Usable
-              </label>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => void withStagedUnit()}
-                disabled={!unitStaged || createUnit.isPending}
-              >
-                <Plus />
-                Add
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <ItemUnitsCard
+          baseUnit={baseUnit ?? ""}
+          units={units}
+          unitLabel={unitLabel}
+          original={originalUnits}
+          rows={unitRows}
+          onRowsChange={setUnitRows}
+          staged={stagedUnit}
+          onStagedChange={setStagedUnit}
+          stagedError={stagedError}
+          onStagedError={setStagedError}
+        />
 
         <Card>
           <CardHeader>
