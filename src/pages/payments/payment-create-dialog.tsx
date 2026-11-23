@@ -63,6 +63,7 @@ const NO_BILL_HINT: Record<NoBillKind, string> = {
   OTHER_IN: "Money in that isn't a sale, a loan or your own capital.",
   OTHER_OUT: "Money out that isn't a bill, a loan installment or a draw.",
   TRANSFER: "Moved between two of the farm's own accounts. Neither money in nor out.",
+  TAX_PAID: "Income tax or a regulatory fee. It uses the tax money held in the reserve and isn't a cost of any batch.",
 };
 
 const REF_NOUN: Record<PaymentRefType, string> = {

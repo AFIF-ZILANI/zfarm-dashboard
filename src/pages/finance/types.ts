@@ -1,3 +1,4 @@
+import type { Fund, Payment, SplitMove } from "@/pages/payments/types";
 export const COST_TYPES = ["DIRECT", "SHARED_PERIOD", "SHARED_CAPITAL"] as const;
 export type CostType = (typeof COST_TYPES)[number];
 /** Every cost type an expense can carry: STOCK is a purchase's charge, only created through its purchase. */
@@ -41,7 +42,7 @@ export type FinancialDashboard = {
   outstanding_payables: string;
   outstanding_receivables: string;
   cash_position: string;
-  cash_by_instrument: { instrument_id: string; label: string; balance: string }[];
+  cash_by_instrument: { instrument_id: string; label: string; balance: string; fund: Fund }[];
 };
 
 export type FinanceAsset = {
@@ -82,6 +83,10 @@ export type FinancePeriod = {
   loans_owed: number;
   /** paid to suppliers ahead of their goods, not used yet; never netted off payables */
   supplier_advances: number;
+  /** `cash` by fund; only operating cash is the farm's to spend */
+  operating_cash: number;
+  reinvest_cash: number;
+  reserve_cash: number;
   cost_breakdown: CostLine[];
 };
 export type FinanceSummary = { current: FinancePeriod; previous: FinancePeriod };
@@ -215,3 +220,42 @@ export const LOAN_INTEREST = "LOAN_INTEREST";
 /** Expenses some other payment settles: never owed, never offered for payment. */
 export const settledElsewhere = (category: string) =>
   PAYROLL_CATEGORIES.includes(category) || category === LOAN_INTEREST;
+
+// ── profit split ───────────────────────────────────────────────────────────────
+/** GET /profit-splits. Money fields are decimal strings. */
+export type ProfitSplitOverview = {
+  reinvest: { set_aside: string; moved: string; to_move: string; balance: string };
+  /** to_move below zero: the reserve still has to give that back to Operating for a loss. */
+  reserve: { set_aside: string; covered: string; moved: string; to_move: string; balance: string; tax_held: string; available: string };
+  owner: { set_aside: string; drawn: string; to_draw: string };
+  carried_loss: string;
+  principal_waiting: string;
+  accounts: { id: string; fund: Fund; label: string }[];
+  defaults: { split_reinvest: number; split_reserve: number; split_owner: number; split_tax: number };
+  spendable_cash: string;
+  not_in_batches: { since: string | null; shared_no_birds: string; written_off: string; capital: string; total: string };
+  waiting: SplitWaiting[];
+  done: SplitDone[];
+  moves: (Payment & { split_move: SplitMove })[];
+};
+export type SplitWaiting = { batch_id: string; batch_code: string; ended_on: string | null; net_profit: string; can_decide: boolean; can_skip: boolean };
+export type SplitDone = {
+  id: string;
+  batch_id: string;
+  batch_code: string;
+  ended_on: string | null;
+  kind: "PROFIT" | "LOSS" | "SKIPPED";
+  net_profit: string;
+  profit_now: string;
+  recovered: string;
+  reinvest: string;
+  reserve: string;
+  owner: string;
+  tax: string;
+  principal_taken: string;
+  loss_covered: string;
+  reason: string | null;
+  approved_by: string;
+  approved_at: string;
+  can_undo: boolean;
+};
