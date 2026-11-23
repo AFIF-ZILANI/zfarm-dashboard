@@ -12,6 +12,7 @@ import { formatDate, humanizeEnum } from "@/lib/utils";
 import { BATCH_SECTIONS, type BatchSection } from "@/components/layout/nav-config";
 import { liveBirdCount, type Batch, type BatchStatus } from "@/pages/batches/types";
 import { BatchCloseDialog } from "@/pages/batches/batch-close-dialog";
+import { BatchSplitLine } from "@/pages/batches/batch-split-line";
 import { ChickDeliveryDialog } from "@/pages/batches/chick-delivery-dialog";
 import { OverviewTab } from "@/pages/batches/tabs/overview-tab";
 import { AllocationsTab } from "@/pages/batches/tabs/allocations-tab";
@@ -139,6 +140,7 @@ export function BatchDetailPage() {
             <Fact label="Expected selling" value={formatDate(batch.expected_selling_date)} />
           </div>
 
+          {batch.status === "CLOSED" && <BatchSplitLine batchId={batch.id} />}
           {batch.status === "RUNNING" && (
             <div className="space-y-1.5">
               <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">

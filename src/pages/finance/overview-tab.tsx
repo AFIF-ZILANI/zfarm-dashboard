@@ -12,7 +12,7 @@ import { KPICard } from "@/components/shared/kpi-card";
 import { useGetData, type Paginated } from "@/lib/api";
 import { cn, daysAgoMs, formatDate, formatTk } from "@/lib/utils";
 import { accountsOf, flowOf, groupSupplierPayments, kindOf, signOf } from "@/pages/payments/movements";
-import { NO_BILL_KINDS, type NoBillKind, type Payment, type PaymentInstrument } from "@/pages/payments/types";
+import { FUNDS, FUND_LABEL, NO_BILL_KINDS, type NoBillKind, type Payment, type PaymentInstrument } from "@/pages/payments/types";
 import type { FinanceMonth, FinanceOwed, FinancePeriod, FinanceSummary, FinancialDashboard, OwedSide } from "@/pages/finance/types";
 import { CashFlowChart, CostBreakdownChart, ProfitTrendChart } from "@/pages/finance/finance-charts";
 
@@ -165,7 +165,15 @@ export function OverviewTab() {
 
       {/* Am I making money, do I have cash, who owes whom */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KPICard label="Cash in accounts" money={tile((p) => p.cash)} icon={Wallet} isLoading={loading} isError={summary.isError} hint={hint((p) => p.cash)} tone={cur && cur.cash < 0 ? "critical" : undefined} />
+        <KPICard
+          label="Operating cash"
+          money={tile((p) => p.operating_cash)}
+          icon={Wallet}
+          isLoading={loading}
+          isError={summary.isError}
+          hint={cur && (cur.reinvest_cash !== 0 || cur.reserve_cash !== 0) ? `Apart from it: reinvestment ${formatTk(cur.reinvest_cash)}, reserve ${formatTk(cur.reserve_cash)}` : hint((p) => p.operating_cash)}
+          tone={cur && cur.operating_cash < 0 ? "critical" : undefined}
+        />
         <KPICard label="Revenue" money={tile((p) => p.revenue)} icon={TrendingUp} isLoading={loading} isError={summary.isError} hint={hint((p) => p.revenue)} />
         <KPICard label="Costs" money={tile((p) => p.costs)} icon={Receipt} isLoading={loading} isError={summary.isError} hint={hint((p) => p.costs)} />
         <KPICard
@@ -223,7 +231,8 @@ export function OverviewTab() {
 function AccountsCard() {
   const navigate = useNavigate();
   const { data, isLoading } = useGetData<FinancialDashboard>("/analytics/financial", ["analytics", "financial", "now"]);
-  const accounts = data?.cash_by_instrument ?? [];
+  // Operating first, then the money set aside.
+  const accounts = [...(data?.cash_by_instrument ?? [])].sort((a, b) => FUNDS.indexOf(a.fund) - FUNDS.indexOf(b.fund));
   const total = accounts.reduce((sum, a) => sum + parseFloat(a.balance), 0);
   return (
     <Card>
@@ -245,6 +254,7 @@ function AccountsCard() {
                   <span className="flex items-center gap-2">
                     <Landmark className="size-4 text-muted-foreground" aria-hidden />
                     {a.label}
+                    {a.fund !== "OPERATING" && <span className="text-xs text-muted-foreground">{FUND_LABEL[a.fund]}</span>}
                   </span>
                   <span className={cn("font-medium tabular-nums", balance < 0 && "text-critical")}>{formatTk(balance)}</span>
                 </li>
