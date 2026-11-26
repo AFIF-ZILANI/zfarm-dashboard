@@ -11,12 +11,20 @@ import { activeStatus } from "@/components/shared/status-tone";
 import { usePageTitle } from "@/components/layout/use-page-title";
 import { useGetData, usePostData, type Paginated } from "@/lib/api";
 import type { House } from "@/pages/houses/types";
+import { mortalityCauseText, type MortalityCause } from "@/pages/batches/types";
 import { HouseFormDialog } from "@/pages/houses/house-form-dialog";
 import { HouseStockDialog } from "@/pages/houses/house-stock-dialog";
 import { HouseDeleteDialog } from "@/pages/houses/house-delete-dialog";
 
 type BatchHouseBalance = { batch_id: string; house_id: string; quantity: number; batch?: { batch_code: string } };
-type MortalityLog = { id: string; batch_id: string; count_died: number; cause_note: string | null; date: string };
+type MortalityLog = {
+  id: string;
+  batch_id: string;
+  count_died: number;
+  cause_note: string | null;
+  suspected_cause: MortalityCause | null;
+  date: string;
+};
 type EnvironmentRecord = {
   id: string;
   date?: string;
@@ -83,7 +91,7 @@ export function HouseDetailPage() {
   const mortalityColumns: Column<MortalityLog>[] = [
     { key: "date", header: "Date", render: (m) => new Date(m.date).toLocaleDateString() },
     { key: "count", header: "Died", render: (m) => m.count_died, numeric: true },
-    { key: "cause", header: "Cause", render: (m) => m.cause_note ?? "—" },
+    { key: "cause", header: "Cause", render: (m) => mortalityCauseText(m) ?? "Unknown" },
   ];
 
   const environmentColumns: Column<EnvironmentRecord>[] = [

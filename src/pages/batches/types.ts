@@ -51,12 +51,29 @@ export type BatchHouseAllocation = {
   occurred_at: string;
 };
 
+/** Server MortalityCause: what the worker thinks killed the birds. null = unknown. */
+export type MortalityCause = "NATURAL" | "INJURY" | "ACCIDENT" | "DISEASE" | "WEAKNESS";
+
+export const MORTALITY_CAUSE_LABEL: Record<MortalityCause, string> = {
+  NATURAL: "Normal loss",
+  INJURY: "Fighting or pecking injury",
+  ACCIDENT: "Accident",
+  DISEASE: "Looked sick",
+  WEAKNESS: "Weak or unhealthy",
+};
+
+/** Cause column text: the picked cause, then the note. "Unknown" when neither is there. */
+export const mortalityCauseText = (m: { suspected_cause?: MortalityCause | null; cause_note: string | null }) =>
+  [m.suspected_cause ? MORTALITY_CAUSE_LABEL[m.suspected_cause] : null, m.cause_note].filter(Boolean).join(". ") ||
+  null;
+
 export type MortalityLog = {
   id: string;
   batch_id: string;
   house_id: string;
   count_died: number;
   cause_note: string | null;
+  suspected_cause: MortalityCause | null;
   disease_case_id: string | null;
   date: string;
   recorded_by_id: string;
