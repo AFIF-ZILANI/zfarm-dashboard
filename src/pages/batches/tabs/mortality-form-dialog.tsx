@@ -20,12 +20,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { PositiveIntegerInput } from "@/components/utils/NumaricInput";
 import { usePostData } from "@/lib/api";
 import { DiseaseCaseSelect } from "@/pages/batches/disease-case-select";
-import type { Batch, MortalityLog } from "@/pages/batches/types";
+import { MORTALITY_CAUSE_LABEL, type Batch, type MortalityCause, type MortalityLog } from "@/pages/batches/types";
 
 const mortalitySchema = z.object({
   house_id: z.string().min(1, "Select a house"),
   count_died: z.coerce.number().int().positive("Must be a positive number"),
   cause_note: z.string().trim().optional(),
+  suspected_cause: z.string().optional(),
   disease_case_id: z.string().optional(),
   date: z.string().min(1, "Date is required"),
 });
@@ -56,6 +57,7 @@ export function MortalityFormDialog({ open, onOpenChange, batch }: MortalityForm
       house_id: "",
       count_died: undefined,
       cause_note: "",
+      suspected_cause: "",
       disease_case_id: "",
       date: nowLocal(),
     },
@@ -69,6 +71,7 @@ export function MortalityFormDialog({ open, onOpenChange, batch }: MortalityForm
         house_id: "",
         count_died: undefined,
         cause_note: "",
+        suspected_cause: "",
         disease_case_id: "",
         date: nowLocal(),
       });
@@ -79,14 +82,17 @@ export function MortalityFormDialog({ open, onOpenChange, batch }: MortalityForm
   const occupiedHouses = batch.houseBalances.filter((b) => b.quantity > 0);
   const queryClient = useQueryClient();
 
-  const createMortalityLog = usePostData<MortalityLog, MortalityFormValues & { batch_id: string }>(
+  const createMortalityLog = usePostData<
+    MortalityLog,
+    Omit<MortalityFormValues, "suspected_cause"> & { batch_id: string; suspected_cause?: MortalityCause }
+  >(
     "/mortality-logs",
     ["mortality-logs", batch.id]
   );
 
   const onSubmit = (values: MortalityFormValues) => {
     // datetime-local has no zone; send the instant so the log keeps its HH:MM.
-    const payload = { ...values, date: new Date(values.date).toISOString(), batch_id: batch.id, cause_note: values.cause_note || undefined, disease_case_id: values.disease_case_id || undefined };
+    const payload = { ...values, date: new Date(values.date).toISOString(), batch_id: batch.id, cause_note: values.cause_note || undefined, suspected_cause: (values.suspected_cause || undefined) as MortalityCause | undefined, disease_case_id: values.disease_case_id || undefined };
     return createMortalityLog.mutate(payload, {
       onSuccess: () => {
         // Mortality decrements the batch's house balances — the detail page's own
@@ -158,6 +164,31 @@ export function MortalityFormDialog({ open, onOpenChange, batch }: MortalityForm
             </div>
           </div>
 
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="suspected_cause">Likely cause</Label>
+            <Controller
+              control={control}
+              name="suspected_cause"
+              render={({ field }) => (
+                <Select value={field.value || "UNKNOWN"} onValueChange={(v) => field.onChange(v === "UNKNOWN" ? "" : v)}>
+                  <SelectTrigger id="suspected_cause" className="w-full">
+                    <SelectValue>
+                      {(v: string) => (v && v !== "UNKNOWN" ? MORTALITY_CAUSE_LABEL[v as MortalityCause] : "Unknown")}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="UNKNOWN">Unknown</SelectItem>
+                    {(Object.keys(MORTALITY_CAUSE_LABEL) as MortalityCause[]).map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {MORTALITY_CAUSE_LABEL[c]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+          </div>
+
           <Controller
             control={control}
             name="disease_case_id"
@@ -178,7 +209,7 @@ export function MortalityFormDialog({ open, onOpenChange, batch }: MortalityForm
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="cause_note">Cause (optional)</Label>
+            <Label htmlFor="cause_note">Details (optional)</Label>
             <Input id="cause_note" {...register("cause_note")} />
           </div>
 

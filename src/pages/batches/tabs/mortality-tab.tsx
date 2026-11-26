@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { DataTable, type Column } from "@/components/shared/data-table";
 import { SectionHeader } from "@/components/shared/section-header";
 import { useGetData, type Paginated } from "@/lib/api";
-import type { Batch, MortalityLog } from "@/pages/batches/types";
+import { mortalityCauseText, type Batch, type MortalityLog } from "@/pages/batches/types";
 import { MortalityFormDialog } from "@/pages/batches/tabs/mortality-form-dialog";
 import { MortalityDiseaseDialog } from "@/pages/batches/tabs/mortality-disease-dialog";
 import { casesForLog, useDiseaseCases } from "@/pages/batches/disease-cases";
@@ -47,7 +47,7 @@ export function MortalityTab({ batch }: { batch: Batch }) {
     { key: "age", header: "Age", render: (m) => `Day ${cycleDay(batch.starting_date, new Date(m.date))}`, numeric: true, sortValue: (m) => m.date },
     { key: "house", header: "House", render: (m) => houseName(m.house_id), sortValue: (m) => houseName(m.house_id) },
     { key: "count", header: "Died", render: (m) => m.count_died.toLocaleString(), numeric: true, sortValue: (m) => m.count_died },
-    { key: "cause", header: "Cause", render: (m) => m.cause_note ?? <span className="text-muted-foreground">—</span> },
+    { key: "cause", header: "Cause", render: (m) => mortalityCauseText(m) ?? <span className="text-muted-foreground">Unknown</span> },
     {
       key: "disease",
       header: "Disease",
