@@ -56,9 +56,9 @@ export type MortalityCause = "NATURAL" | "INJURY" | "ACCIDENT" | "DISEASE" | "WE
 
 export const MORTALITY_CAUSE_LABEL: Record<MortalityCause, string> = {
   NATURAL: "Normal loss",
-  INJURY: "Fighting or pecking injury",
+  INJURY: "Fighting or pecking",
   ACCIDENT: "Accident",
-  DISEASE: "Looked sick",
+  DISEASE: "Sick",
   WEAKNESS: "Weak or unhealthy",
 };
 
